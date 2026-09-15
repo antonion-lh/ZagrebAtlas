@@ -26,6 +26,7 @@ type Red = {
   email: string | null;
   web: string | null;
   vrsta: string | null;
+  energy_id: string | null;
 };
 
 type Params = { q?: string; tema?: string; skup?: string; cetvrt?: string; str?: string };
@@ -91,10 +92,14 @@ export default async function UstanovePage({
         `SELECT o.id::text, o.skup_sifra AS skup, o.tip, o.naziv, o.adresa,
                 c.naziv AS cetvrt, c.slug AS cetvrt_slug, m.naziv AS mo,
                 o.attrs->>'telefon' AS telefon, o.attrs->>'email' AS email,
-                o.attrs->>'web' AS web, o.attrs->>'vrsta' AS vrsta
+                o.attrs->>'web' AS web, o.attrs->>'vrsta' AS vrsta,
+                e.id::text AS energy_id
          FROM geo.objekt o
          LEFT JOIN geo.cetvrt c ON c.id = o.cetvrt_id
          LEFT JOIN geo.mo m ON m.id = o.mo_id
+         LEFT JOIN LATERAL (
+           SELECT id FROM energy.objekt WHERE geo_objekt_id = o.id ORDER BY id LIMIT 1
+         ) e ON true
          WHERE ${where}
          ORDER BY o.naziv NULLS LAST, o.adresa
          LIMIT ${PO_STRANICI} OFFSET ${(str - 1) * PO_STRANICI}`,
@@ -120,7 +125,8 @@ export default async function UstanovePage({
       <h1>Ustanove i usluge</h1>
       <p className="uvod">
         Škole, vrtići, ljekarne, stajališta, sportski i zdravstveni objekti. Tražite po nazivu ili adresi;
-        uz svaki red stoji izvor i koliko je podatak star.
+        uz svaki red stoji izvor i koliko je podatak star. Ako je objekt spojen na ISGE, otvara se energetski
+        dosje.
       </p>
 
       <form method="get" action="/ustanove" className="filter-forma">
@@ -210,13 +216,14 @@ export default async function UstanovePage({
               <th scope="col">Adresa</th>
               <th scope="col">Četvrt / MO</th>
               <th scope="col">Kontakt</th>
+              <th scope="col">Energija</th>
               <th scope="col">Izvor</th>
             </tr>
           </thead>
           <tbody>
             {redovi.length === 0 && !greska ? (
               <tr>
-                <td colSpan={6}>Nema rezultata za ovaj upit. Promijenite pojam ili četvrt.</td>
+                <td colSpan={7}>Nema rezultata za ovaj upit. Promijenite pojam ili četvrt.</td>
               </tr>
             ) : (
               redovi.map((r) => {
@@ -249,6 +256,9 @@ export default async function UstanovePage({
                         </a>
                       </div>
                     ) : null}
+                  </td>
+                  <td data-oznaka="Energija" style={{ fontSize: "0.86rem" }}>
+                    {r.energy_id ? <Link href={`/energija/${r.energy_id}`}>dosje</Link> : "—"}
                   </td>
                   <td data-oznaka="Izvor" style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>
                     {m ? (

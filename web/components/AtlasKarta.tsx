@@ -24,6 +24,8 @@ type Props = {
 type Odabir = {
   sloj: SlojMeta;
   props: Record<string, unknown>;
+  lon?: number;
+  lat?: number;
 };
 
 type Pogodak = {
@@ -67,7 +69,9 @@ function dodajSloj(map: maplibregl.Map, m: SlojMeta, fc: FeatureCollection) {
     // poligoni idu ispod svih točkastih/linijskih slojeva
     const prviNePoligon = map
       .getStyle()
-      .layers.find((l) => l.id !== "osm" && !l.id.endsWith("-fill") && !l.id.endsWith("-line"))?.id;
+      .layers.find(
+        (l) => l.id !== "osm" && l.id !== "orto" && !l.id.endsWith("-fill") && !l.id.endsWith("-line")
+      )?.id;
     const jeCetvrt = s === "cetvrti";
     const jeMo = s === "mo";
     map.addLayer(
@@ -183,6 +187,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
   const [greske, setGreske] = useState<Record<string, string>>({});
   const [cetvrtId, setCetvrtId] = useState<number | null>(null);
   const [odabir, setOdabir] = useState<Odabir | null>(null);
+  // Na mobitelu karta ide prva; panel slojeva se otvara gumbom.
   const [panelOtvoren, setPanelOtvoren] = useState(true);
   const [bezWebGL, setBezWebGL] = useState(false);
   const [urlSpreman, setUrlSpreman] = useState(false);
@@ -191,6 +196,17 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
   const [traziIde, setTraziIde] = useState(false);
   const [legendaQ, setLegendaQ] = useState("");
   const [kopirano, setKopirano] = useState(false);
+  const [podloga, setPodloga] = useState<"osm" | "orto">("osm");
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 720px)");
+    const uskladi = () => {
+      if (mq.matches) setPanelOtvoren(false);
+    };
+    uskladi();
+    mq.addEventListener("change", uskladi);
+    return () => mq.removeEventListener("change", uskladi);
+  }, []);
 
   // URL parametri: ?cetvrt=<id|slug>&sloj=a,b,c (dosje → karta)
   useEffect(() => {
@@ -205,6 +221,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
       const zeljeni = s.split(",").filter((x) => slojevi.some((m) => m.sifra === x));
       if (zeljeni.length) setUkljuceno(new Set(["cetvrti", ...zeljeni]));
     }
+    if (q.get("podloga") === "orto") setPodloga("orto");
     setUrlSpreman(true);
   }, [cetvrti, slojevi]);
 
@@ -244,12 +261,13 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
     const aktivni = [...ukljuceno].filter((s) => s !== "cetvrti").sort();
     const zadano = ZADANO_UKLJUCENO.filter((s) => s !== "cetvrti" && slojevi.some((m) => m.sifra === s)).sort();
     if (aktivni.join(",") !== zadano.join(",")) q.set("sloj", aktivni.join(","));
+    if (podloga === "orto") q.set("podloga", "orto");
     const qs = q.toString();
     const cilj = qs ? `/?${qs}` : "/";
     if (`${window.location.pathname}${window.location.search}` !== cilj) {
       window.history.replaceState(null, "", cilj);
     }
-  }, [urlSpreman, cetvrtId, ukljuceno, cetvrti, slojevi]);
+  }, [urlSpreman, cetvrtId, ukljuceno, cetvrti, slojevi, podloga]);
 
   const slojPoSifri = useMemo(() => new Map(slojevi.map((m) => [m.sifra, m])), [slojevi]);
   const cetvrtIdRef = useRef<number | null>(null);
@@ -272,8 +290,18 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
             tileSize: 256,
             attribution: "© OpenStreetMap",
           },
+          orto: {
+            type: "raster",
+            tiles: ["/api/podloga/ortofoto/{z}/{x}/{y}"],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: "Ortofoto 2022 © Grad Zagreb, ZIPP",
+          },
         },
-        layers: [{ id: "osm", type: "raster", source: "osm" }],
+        layers: [
+          { id: "osm", type: "raster", source: "osm" },
+          { id: "orto", type: "raster", source: "orto", layout: { visibility: "none" } },
+        ],
       },
         center: [15.98, 45.81],
         zoom: 11,
@@ -300,7 +328,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
     map.on("click", (e) => {
       if (!map.isStyleLoaded()) return;
       const style = map.getStyle();
-      const ids = style.layers.map((l) => l.id).filter((id) => id !== "osm");
+      const ids = style.layers.map((l) => l.id).filter((id) => id !== "osm" && id !== "orto");
       const redoslijed = [
         ...ids.filter((id) => id.endsWith("-pt") || id.endsWith("-ln")),
         ...ids.filter((id) => id.endsWith("-cl")),
@@ -335,7 +363,8 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
       const sifra = f.source.replace(/^s-/, "");
       const meta = slojPoSifri.get(sifra);
       if (!meta) return;
-      setOdabir({ sloj: meta, props: { ...(f.properties || {}) } });
+      setOdabir({ sloj: meta, props: { ...(f.properties || {}) }, lon: e.lngLat.lng, lat: e.lngLat.lat });
+      if (window.matchMedia("(max-width: 720px)").matches) setPanelOtvoren(false);
     });
 
     map.on("mousemove", (e) => {
@@ -413,6 +442,17 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
       }
     }
   }, [ukljuceno, spremna, slojevi, osiguraj]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !spremna || !map.isStyleLoaded()) return;
+    if (map.getLayer("osm")) {
+      map.setLayoutProperty("osm", "visibility", podloga === "osm" ? "visible" : "none");
+    }
+    if (map.getLayer("orto")) {
+      map.setLayoutProperty("orto", "visibility", podloga === "orto" ? "visible" : "none");
+    }
+  }, [podloga, spremna]);
 
   // nakon lazy dodavanja sloja vidljivost mora odgovarati stanju
   useEffect(() => {
@@ -498,7 +538,10 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
           cetvrt_slug: p.cetvrt_slug,
           slug: p.vrsta === "cetvrt" ? p.cetvrt_slug : undefined,
         },
+        lon: p.lon,
+        lat: p.lat,
       });
+      if (window.matchMedia("(max-width: 720px)").matches) setPanelOtvoren(false);
     }
     setTrazi("");
     setPogoci([]);
@@ -554,9 +597,10 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
   }
 
   return (
-    <div className="karta-okvir">
+    <div className={`karta-okvir${odabir ? " ima-inspector" : ""}${panelOtvoren ? " ima-panel" : ""}`}>
       {panelOtvoren ? (
         <aside className="karta-panel" aria-label="Slojevi karte">
+          <div className="karta-hvataljka" aria-hidden="true" />
           <button
             type="button"
             className="karta-zatvori"
@@ -624,6 +668,27 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
               ))}
             </select>
           </label>
+          <fieldset className="karta-podloga">
+            <legend className="karta-muted">Podloga</legend>
+            <label>
+              <input
+                type="radio"
+                name="podloga"
+                checked={podloga === "osm"}
+                onChange={() => setPodloga("osm")}
+              />
+              OpenStreetMap
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="podloga"
+                checked={podloga === "orto"}
+                onChange={() => setPodloga("orto")}
+              />
+              Ortofoto 2022
+            </label>
+          </fieldset>
           {cetvrtId !== null ? (
             <p className="karta-poveznica">
               <a href={`/cetvrti/${cetvrti.find((c) => c.id === cetvrtId)?.slug}`}>Dosje ove četvrti</a>
@@ -700,12 +765,24 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
           </p>
         </aside>
       ) : (
-        <button type="button" className="karta-gumb" onClick={() => setPanelOtvoren(true)}>
+        <button
+          type="button"
+          className="karta-gumb"
+          onClick={() => {
+            setOdabir(null);
+            setPanelOtvoren(true);
+          }}
+        >
           Slojevi
         </button>
       )}
 
-      {odabir ? <Inspector odabir={odabir} onClose={() => setOdabir(null)} /> : null}
+      {odabir ? (
+        <Inspector
+          odabir={odabir}
+          onClose={() => setOdabir(null)}
+        />
+      ) : null}
 
       <div ref={ref} className="karta-platno" />
     </div>
@@ -728,12 +805,51 @@ const SKRIVENO = new Set([
   "email",
   "web",
   "cetvrt_naziv",
+  "energy_id",
 ]);
 
 function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void }) {
-  const { sloj, props } = odabir;
+  const { sloj, props, lon, lat } = odabir;
   const naziv = String(props.naziv || sloj.naziv);
   const tip = typeof props.tip === "string" ? TIP_NAZIV[props.tip] || props.tip : null;
+  const objektId = props.id != null ? String(props.id) : "";
+  const energyId = props.energy_id != null ? String(props.energy_id) : "";
+
+  const [blizina, setBlizina] = useState<
+    { id: string; naziv: string | null; tip: string; skup: string; metara: number }[]
+  >([]);
+  const [presjeci, setPresjeci] = useState<{ id: string; naziv: string | null; skup: string }[]>([]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    if (lon != null && lat != null && Number.isFinite(lon) && Number.isFinite(lat)) {
+      const qs = new URLSearchParams({ lon: String(lon), lat: String(lat) });
+      if (objektId) qs.set("osim", objektId);
+      fetch(`/api/blizina?${qs}`, { signal: ac.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { objekti?: typeof blizina } | null) => setBlizina(d?.objekti || []))
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setBlizina([]);
+        });
+    } else {
+      setBlizina([]);
+    }
+    const trebaPresjek =
+      sloj.sifra === "prometnice" || sloj.sifra === "bic_staze" || sloj.sifra === "pjesacke_zone";
+    if (trebaPresjek && objektId) {
+      fetch(`/api/presjek?id=${encodeURIComponent(objektId)}`, { signal: ac.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { presjeci?: typeof presjeci } | null) => setPresjeci(d?.presjeci || []))
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setPresjeci([]);
+        });
+    } else {
+      setPresjeci([]);
+    }
+    return () => ac.abort();
+  }, [sloj.sifra, objektId, lon, lat]);
 
   let ostalo: Record<string, unknown> = {};
   if (typeof props.ostalo === "string" && props.ostalo) {
@@ -749,9 +865,13 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
 
   const web = typeof props.web === "string" && props.web ? props.web : null;
   const webHref = web ? (web.startsWith("http") ? web : `https://${web}`) : null;
+  const izvorHref =
+    sloj.ckan_url ||
+    (sloj.sifra === "gtfs_rute" ? "https://www.zet.hr/gtfs-scheduled/latest" : null);
 
   return (
     <aside className="karta-inspector" aria-label="Pregled objekta">
+      <div className="karta-hvataljka" aria-hidden="true" />
       <button type="button" className="karta-zatvori" aria-label="Zatvori" onClick={onClose}>
         ×
       </button>
@@ -762,14 +882,14 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         {sloj.sifra === "mo" ? " · mjesni odbor" : ""}
       </div>
 
-        {sloj.sifra === "cetvrti" && typeof props.slug === "string" ? (
+      {sloj.sifra === "cetvrti" && typeof props.slug === "string" ? (
         <p className="karta-poveznica">
           <a href={`/cetvrti/${props.slug}`}>Dosje ove četvrti</a>
         </p>
       ) : null}
-      {sloj.sifra === "isge" && props.energy_id ? (
+      {energyId ? (
         <p className="karta-poveznica">
-          <a href={`/energija/${String(props.energy_id)}`}>Potrošnja energije ovog objekta</a>
+          <a href={`/energija/${energyId}`}>Potrošnja energije ovog objekta</a>
         </p>
       ) : null}
 
@@ -832,7 +952,7 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         ) : null}
         {dodatno
           .filter(([k]) => !(sloj.sifra === "prometnice" && (k === "od" || k === "do")))
-          .filter(([k]) => !(sloj.sifra === "isge" && (k === "godine" || k === "energy_id")))
+          .filter(([k]) => k !== "godine" && k !== "energy_id")
           .map(([k, v]) => (
             <Red key={k} k={k} v={v} />
           ))}
@@ -842,6 +962,49 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
             <Red key={`o-${k}`} k={k} v={v} />
           ))}
       </dl>
+
+      {presjeci.length ? (
+        <div style={{ marginTop: "0.7rem", fontSize: "0.88rem" }}>
+          <strong>
+            {sloj.sifra === "prometnice"
+              ? "Siječe biciklističke staze ili pješačke zone"
+              : "Aktivna zatvaranja na ovoj geometriji"}
+          </strong>
+          <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>
+            {presjeci.map((p) => (
+              <li key={p.id}>{p.naziv || p.skup}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {blizina.length ? (
+        <div style={{ marginTop: "0.7rem", fontSize: "0.88rem" }}>
+          <strong>U blizini (do 400 m)</strong>
+          <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.1rem" }}>
+            {blizina.map((b) => (
+              <li key={b.id}>
+                {b.naziv || TIP_NAZIV[b.tip] || b.tip}{" "}
+                <span className="karta-muted">
+                  · {b.metara} m · {TIP_NAZIV[b.tip] || b.tip}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {sloj.sifra === "kvaliteta_zraka" ? (
+        <p className="karta-poveznica" style={{ marginTop: "0.6rem" }}>
+          <a href="https://eko.zagreb.hr/" target="_blank" rel="noreferrer">
+            Živa mjerenja: eko.zagreb.hr
+          </a>
+          {" · "}
+          <a href="https://meteo.hr/" target="_blank" rel="noreferrer">
+            DHMZ
+          </a>
+        </p>
+      ) : null}
 
       <div className="izvor">
         <div>
@@ -853,11 +1016,11 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         <div style={{ marginTop: "0.25rem" }}>{AZURNOST_OPIS[sloj.azurnost]}</div>
         <div style={{ marginTop: "0.25rem" }}>
           Preuzeto u Atlas: {formatDatum(sloj.sink)}
-          {sloj.ckan_url ? (
+          {izvorHref ? (
             <>
               {" · "}
-              <a href={sloj.ckan_url} target="_blank" rel="noreferrer">
-                izvor na data.zagreb.hr
+              <a href={izvorHref} target="_blank" rel="noreferrer">
+                {sloj.sifra === "gtfs_rute" ? "ZET GTFS" : "izvor na data.zagreb.hr"}
               </a>
             </>
           ) : null}

@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SlozeniStupci } from "@/components/EnergijaGraf";
-import { bojaEnergenta, energijaObjekt, fmtEur, fmtKwh, VODA } from "@/lib/energija";
+import {
+  bojaEnergenta,
+  energijaAnalitika,
+  energijaObjekt,
+  fmtEur,
+  fmtKwh,
+  VODA,
+  type KrizaGodina,
+} from "@/lib/energija";
 import { TIP_NAZIV, kratkiNaziv } from "@/lib/slojevi-ui";
 import { ucitajMetaSlojeva } from "@/lib/slojevi";
 
@@ -23,7 +31,11 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
   const { id } = await params;
   const n = Number(id);
   if (!Number.isInteger(n) || n <= 0) notFound();
-  const [d, slojevi] = await Promise.all([energijaObjekt(n), ucitajMetaSlojeva()]);
+  const [d, slojevi, analitika] = await Promise.all([
+    energijaObjekt(n),
+    ucitajMetaSlojeva(),
+    energijaAnalitika(n).catch(() => null),
+  ]);
   if (!d) notFound();
   const { objekt: o, poGodini, mjeseci } = d;
 
@@ -185,6 +197,8 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
         </details>
       </section>
 
+      {analitika ? <Analitika a={analitika} /> : null}
+
       <p style={{ marginTop: "1.5rem", fontSize: "0.88rem" }}>
         <a href={`/api/izvoz/energija/${o.id}`}>Preuzmi CSV svih mjeseci</a> ·{" "}
         <a href="https://data.zagreb.hr/dataset/podaci-o-potrosnji-i-trosku-za-objekte-grada-zagreba" target="_blank" rel="noreferrer">
@@ -195,5 +209,96 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
         ) : null}
       </p>
     </div>
+  );
+}
+
+function pct(stara: number | undefined, nova: number | undefined): string | null {
+  if (stara == null || nova == null || stara === 0) return null;
+  const p = ((nova - stara) / stara) * 100;
+  const predznak = p > 0 ? "+" : "";
+  return `${predznak}${p.toLocaleString("hr-HR", { maximumFractionDigits: 0 })} %`;
+}
+
+function god(rows: KrizaGodina[], g: number): KrizaGodina | undefined {
+  return rows.find((x) => x.godina === g);
+}
+
+function Analitika({ a }: { a: NonNullable<Awaited<ReturnType<typeof energijaAnalitika>>> }) {
+  const o21 = god(a.krizaObjekt, 2021);
+  const o22 = god(a.krizaObjekt, 2022);
+  const k21 = god(a.krizaKohorta, 2021);
+  const k22 = god(a.krizaKohorta, 2022);
+  const dkwh = pct(o21?.kwh, o22?.kwh);
+  const deur = pct(o21?.eur, o22?.eur);
+  const krizaCijena = o21 && o22 && o22.kwh < o21.kwh && o22.eur > o21.eur;
+  const zima = a.sezona.find((s) => s.sezona === "zima");
+  const ljeto = a.sezona.find((s) => s.sezona === "ljeto");
+
+  return (
+    <section style={{ marginTop: "1.5rem" }}>
+      <h2 style={{ fontSize: "1.1rem", marginBottom: "0.35rem" }}>Čitanje serije</h2>
+
+      <h3 style={{ fontSize: "1rem", margin: "0.8rem 0 0.3rem" }}>Kriza 2022.</h3>
+      <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.5 }}>
+        Usporedba pune 2021. i 2022. (bez vode). Trošak je s PDV-om, pa rast računa ne znači nužno veću
+        potrošnju.
+      </p>
+      {o21 && o22 ? (
+        <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem", fontSize: "0.92rem", lineHeight: 1.55 }}>
+          <li>
+            Ovaj objekt: energija {fmtKwh(o21.kwh)} → {fmtKwh(o22.kwh)}
+            {dkwh ? ` (${dkwh})` : ""}; račun {fmtEur(o21.eur)} → {fmtEur(o22.eur)}
+            {deur ? ` (${deur})` : ""}.
+            {krizaCijena ? " Fizička potrošnja je pala, a račun porastao — obrazac cijene 2022." : ""}
+          </li>
+          {k21 && k22 ? (
+            <li>
+              Medijan iste namjene (kohorta, {k22.objekata ?? k21.objekata} objekata): energija{" "}
+              {fmtKwh(k21.kwh)} → {fmtKwh(k22.kwh)}
+              {pct(k21.kwh, k22.kwh) ? ` (${pct(k21.kwh, k22.kwh)})` : ""}; račun {fmtEur(k21.eur)} →{" "}
+              {fmtEur(k22.eur)}
+              {pct(k21.eur, k22.eur) ? ` (${pct(k21.eur, k22.eur)})` : ""}.
+            </li>
+          ) : null}
+        </ul>
+      ) : (
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Nema usporedivih godina 2021. i 2022. za ovaj objekt.</p>
+      )}
+
+      <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.3rem" }}>Sezona</h3>
+      {zima && ljeto ? (
+        <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.5 }}>
+          Zima (listopad–ožujak): {fmtKwh(zima.kwh_po_mjesecu)} mjesečno u punim godinama. Ljeto
+          (travanj–rujan): {fmtKwh(ljeto.kwh_po_mjesecu)} mjesečno.{" "}
+          {zima.kwh_po_mjesecu > ljeto.kwh_po_mjesecu
+            ? `Zima je ${(zima.kwh_po_mjesecu / Math.max(1, ljeto.kwh_po_mjesecu)).toLocaleString("hr-HR", { maximumFractionDigits: 1 })} puta veća od ljeta.`
+            : "Ljetna potrošnja nije manja od zimske (hlađenje ili cjelogodišnji pogon)."}
+        </p>
+      ) : (
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          Sezona se računa samo iz godina s svih 12 mjeseci.
+        </p>
+      )}
+
+      <h3 style={{ fontSize: "1rem", margin: "1rem 0 0.3rem" }}>Kohorta</h3>
+      {a.kohorta ? (
+        <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.5 }}>
+          {a.kohorta.godina}. medijan iste namjene
+          {a.kohorta.razina === "cetvrt" ? " u istoj četvrti" : " u gradu"} ({a.kohorta.n} objekata):{" "}
+          {fmtKwh(a.kohorta.medijan_kwh)} / {fmtEur(a.kohorta.medijan_eur)}. Ovaj objekt:{" "}
+          {fmtKwh(a.kohorta.objekt_kwh)} / {fmtEur(a.kohorta.objekt_eur)}
+          {a.kohorta.medijan_kwh && a.kohorta.objekt_kwh
+            ? a.kohorta.objekt_kwh > a.kohorta.medijan_kwh
+              ? " — iznad medijana kohorte."
+              : " — na ili ispod medijana kohorte."
+            : "."}{" "}
+          Nije ocjena zgrade: nema površine, pa nema kWh/m².
+        </p>
+      ) : (
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          Premalo spojenih objekata iste namjene za medijan.
+        </p>
+      )}
+    </section>
   );
 }

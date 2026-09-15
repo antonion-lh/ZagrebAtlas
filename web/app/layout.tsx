@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans } from "next/font/google";
 import { Nav } from "@/components/Nav";
 import "./globals.css";
@@ -18,6 +18,16 @@ export const metadata: Metadata = {
     template: "%s — Zagreb Gradski atlas",
   },
   description: "Karta i dosjei četvrti nad otvorenim podacima Grada Zagreba. Svaki sloj nosi oznaku koliko je podatak star.",
+  appleWebApp: { capable: true, title: "Zagreb Atlas", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f3efe6",
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

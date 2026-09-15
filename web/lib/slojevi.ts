@@ -121,6 +121,7 @@ export async function ucitajSloj(sifra: string): Promise<FeatureCollection | nul
     mo: string | null;
     attrs: Record<string, unknown>;
     geojson: string;
+    energy_id: string | null;
   }>(
     `SELECT o.id::text, o.naziv, o.adresa, o.tip, o.cetvrt_id,
             c.naziv AS cetvrt, c.slug AS cetvrt_slug, m.naziv AS mo,
@@ -129,10 +130,14 @@ export async function ucitajSloj(sifra: string): Promise<FeatureCollection | nul
               CASE WHEN GeometryType(o.geom) IN ('POINT', 'MULTIPOINT') THEN o.geom
                    ELSE ST_SimplifyPreserveTopology(o.geom, 0.00002) END,
               6
-            ) AS geojson
+            ) AS geojson,
+            e.id::text AS energy_id
      FROM geo.objekt o
      LEFT JOIN geo.cetvrt c ON c.id = o.cetvrt_id
      LEFT JOIN geo.mo m ON m.id = o.mo_id
+     LEFT JOIN LATERAL (
+       SELECT id FROM energy.objekt WHERE geo_objekt_id = o.id ORDER BY id LIMIT 1
+     ) e ON true
      WHERE o.skup_sifra = $1`,
     [sifra]
   );
@@ -152,6 +157,7 @@ export async function ucitajSloj(sifra: string): Promise<FeatureCollection | nul
         cetvrt: r.cetvrt,
         cetvrt_slug: r.cetvrt_slug,
         mo: r.mo,
+        energy_id: r.energy_id,
         ...ravno,
         ostalo: ostalo ? JSON.stringify(ostalo) : null,
       },

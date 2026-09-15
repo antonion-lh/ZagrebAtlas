@@ -9,7 +9,11 @@ import hashlib
 import json
 import os
 import re
+import time
 import zipfile
+import xml.etree.ElementTree as ET
+from datetime import date, timedelta
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from typing import Callable
 
@@ -185,6 +189,44 @@ MIGRACIJE = [
     "ALTER TABLE geo.objekt ADD COLUMN IF NOT EXISTS adresa_norm text",
     "ALTER TABLE geo.objekt ADD COLUMN IF NOT EXISTS kucni_broj text",
     "CREATE INDEX IF NOT EXISTS idx_objekt_adresa_norm ON geo.objekt (adresa_norm, kucni_broj)",
+    "CREATE SCHEMA IF NOT EXISTS okolis",
+    """
+    CREATE TABLE IF NOT EXISTS okolis.zrak_dan (
+        postaja     text NOT NULL,
+        paket_id    text NOT NULL,
+        datum       date NOT NULL,
+        polutant    text NOT NULL,
+        jedinica    text,
+        vrijednost  numeric,
+        PRIMARY KEY (postaja, datum, polutant)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_zrak_postaja ON okolis.zrak_dan (postaja, datum)",
+    """
+    CREATE TABLE IF NOT EXISTS meta.portal_skup (
+        id          serial PRIMARY KEY,
+        naziv       text NOT NULL,
+        opis        text,
+        ucestalost  text,
+        poveznica   text,
+        uvjeti      text,
+        paket_id    text,
+        atlas_sifra text REFERENCES meta.skup (sifra),
+        stanje      text NOT NULL DEFAULT 'nije_u_atlasu'
+                    CHECK (stanje IN ('u_atlasu', 'nije_u_atlasu', 'nije_ckan'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_portal_stanje ON meta.portal_skup (stanje)",
+    "CREATE INDEX IF NOT EXISTS idx_portal_paket ON meta.portal_skup (paket_id)",
+    """
+    CREATE TABLE IF NOT EXISTS meta.geokod (
+        upit        text PRIMARY KEY,
+        lon         double precision,
+        lat         double precision,
+        izvor       text,
+        fetched_at  timestamptz NOT NULL DEFAULT now()
+    )
+    """,
     r"""
     CREATE OR REPLACE FUNCTION geo.norm_adresa(a text) RETURNS text
     LANGUAGE sql IMMUTABLE AS $$
@@ -259,11 +301,24 @@ def ensure_skup(conn: psycopg.Connection, s: Skup) -> None:
 # ---------------------------------------------------------------------------
 
 
-def ckan_resource_url(paket_id: str, prefer: str = "SHP") -> str:
-    r = httpx.get(f"{CKAN_API}/package_show", params={"id": paket_id}, timeout=60)
+def ckan_resource_url(paket_id: str, prefer: str = "SHP", ime_sadrzi: str | None = None) -> str:
+    r = httpx.get(f"{CKAN_API}/package_show", params={"id": paket_id}, timeout=60, headers=UA)
     r.raise_for_status()
     resources = r.json()["result"]["resources"]
     prefer_u = prefer.upper()
+    if ime_sadrzi:
+        imena = [
+            res
+            for res in resources
+            if ime_sadrzi.lower() in (res.get("name") or res.get("description") or "").lower()
+            and res.get("url")
+        ]
+        if prefer_u:
+            fmt = [res for res in imena if (res.get("format") or "").upper() == prefer_u]
+            if fmt:
+                return fmt[-1]["url"]
+        if imena:
+            return imena[-1]["url"]
     if prefer_u == "GEOJSON":
         geo = [
             res
@@ -292,9 +347,12 @@ def ckan_resource_url(paket_id: str, prefer: str = "SHP") -> str:
     raise RuntimeError(f"Nema resursa za paket {paket_id}")
 
 
+UA = {"User-Agent": "ZagrebAtlas/1.0 (https://zg-atlas.lakehouse.hr; otvoreni podaci)"}
+
+
 def download(url: str, dest: Path) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with httpx.stream("GET", url, follow_redirects=True, timeout=180) as r:
+    with httpx.stream("GET", url, follow_redirects=True, timeout=180, headers=UA) as r:
         r.raise_for_status()
         with dest.open("wb") as f:
             for chunk in r.iter_bytes():
@@ -468,8 +526,8 @@ def _prvo(props: dict, kandidati: tuple[str, ...]) -> str | None:
     return None
 
 
-def preuzmi_tekst(meta: Skup, ime: str) -> str:
-    url = ckan_resource_url(meta.paket_id, meta.preferirani_format)
+def preuzmi_tekst(meta: Skup, ime: str, ime_sadrzi: str | None = None) -> str:
+    url = ckan_resource_url(meta.paket_id, meta.preferirani_format, ime_sadrzi=ime_sadrzi)
     path = DATA_DIR / meta.sifra / ime
     print(f"Preuzimam {url}")
     download(url, path)
@@ -835,6 +893,15 @@ def _tocka(geom: dict | None) -> list[float] | None:
     return None
 
 
+def _dijelovi_poligona(geom: dict) -> list[dict]:
+    """MultiPolygon → zasebni Polygon (npr. pješačke zone kao jedan CKAN zapis)."""
+    if geom.get("type") == "Polygon" and geom.get("coordinates"):
+        return [geom]
+    if geom.get("type") == "MultiPolygon":
+        return [{"type": "Polygon", "coordinates": p} for p in (geom.get("coordinates") or []) if p]
+    return [geom]
+
+
 def _geom_za_bazu(geom: dict | None, meta: Skup) -> dict | None:
     """Točkasti skupovi → Point unutar Zagreba; poligonski → izvorni (Multi)Polygon."""
     if not geom or not isinstance(geom, dict):
@@ -912,17 +979,21 @@ def sync_geoportal(conn: psycopg.Connection, meta: Skup) -> None:
         attrs = {k: v for k, v in kan.items() if k not in ("naziv", "adresa") and v}
         if ostalo:
             attrs["ostalo"] = ostalo
-        rows.append(
-            (
-                meta.sifra,
-                oid,
-                meta.tip,
-                naziv,
-                kan["adresa"],
-                json.dumps(geom),
-                json.dumps(attrs, ensure_ascii=False, default=str),
+        dijelovi = _dijelovi_poligona(geom) if meta.sifra == "pjesacke_zone" else [geom]
+        for i, g in enumerate(dijelovi):
+            oid_i = oid if len(dijelovi) == 1 else f"{oid}-{i + 1}"
+            naziv_i = naziv if len(dijelovi) == 1 else f"{naziv} ({i + 1})"
+            rows.append(
+                (
+                    meta.sifra,
+                    oid_i,
+                    meta.tip,
+                    naziv_i,
+                    kan["adresa"],
+                    json.dumps(g),
+                    json.dumps(attrs, ensure_ascii=False, default=str),
+                )
             )
-        )
 
     zamijeni_objekte(conn, meta.sifra, rows)
     if meta.geometrija == "poligon":
@@ -1149,10 +1220,10 @@ def sync_prostori_ms(conn: psycopg.Connection, meta: Skup) -> None:
 
 ISGE_SKUPOVI_ZA_SPAJANJE = (
     "vrtici", "privatni_vrtici", "osnovne", "srednje", "ucenicki_domovi", "visoka",
-    "studentski_restorani", "studentska_naselja",
-    "zdravstvene", "domovi_zdravlja", "domovi_starije", "osi", "domovi_djeca", "odmorko",
+    "studentski_restorani", "studentska_naselja", "odgojno",
+    "zdravstvo", "domovi_zdravlja", "stariji", "osi", "domovi_djeca", "odmorko",
     "soc_skrb", "beskucnici", "branitelji",
-    "sportski", "kulturne",
+    "sport", "kultura",
     "reciklazna", "trznice", "garaze", "vatrogasci",
     "sjedista_gc", "sjedista_mo", "podrucni_uredi",
 )
@@ -1177,6 +1248,7 @@ def sync_isge(conn: psycopg.Connection, meta: Skup) -> None:
 
     objekti: dict[str, dict] = {}
     agg: dict[tuple[str, str, int, int], list[float]] = {}
+    storno = 0
     with path.open(encoding="utf-8-sig", newline="") as fh:
         rdr = csv.reader(fh, delimiter=";")
         hdr = next(rdr)
@@ -1203,9 +1275,14 @@ def sync_isge(conn: psycopg.Connection, meta: Skup) -> None:
                 god, mj = int(r[6]), int(r[7])
             except ValueError:
                 continue
+            kol, kwh, eur = _broj(r[8]), _broj(r[9]), _broj(r[10])
+            # Korekcijski/storno redovi (negativne količine) ne ulaze u zbroj; brojimo ih za katalog E.
+            if any(v is not None and v < 0 for v in (kol, kwh, eur)):
+                storno += 1
+                continue
             k = (kljuc, energent, god, mj)
             a = agg.setdefault(k, [0.0, 0.0, 0.0])
-            for i, v in enumerate((_broj(r[8]), _broj(r[9]), _broj(r[10]))):
+            for i, v in enumerate((kol, kwh, eur)):
                 if v is not None:
                     a[i] += v
 
@@ -1263,7 +1340,8 @@ def sync_isge(conn: psycopg.Connection, meta: Skup) -> None:
         conn,
         meta.sifra,
         len(objekti),
-        f"{len(agg)} agregiranih mjeseci; {n_spojeno}/{len(objekti)} objekata spojeno na registar, {n_karta} na karti",
+        f"{len(agg)} agregiranih mjeseci; storno_iskljuceno={storno}; "
+        f"{n_spojeno}/{len(objekti)} objekata spojeno na registar, {n_karta} na karti",
     )
     print(
         f"Učitano {len(objekti)} objekata ISGE, {len(agg)} redaka potrošnje; spojeno {n_spojeno}, na karti {n_karta}"
@@ -1392,10 +1470,660 @@ def isge_na_kartu(conn: psycopg.Connection, meta: Skup) -> int:
     return len(rows)
 
 
-def osvjezi_ckan_meta(conn: psycopg.Connection, meta: Skup) -> None:
-    """Asset lista iz CKAN package_show: resursi, licenca, izdavač, datum izmjene (katalog E)."""
+# ---------------------------------------------------------------------------
+# Korpus v1.3: GTFS, asset lista, zrak 2023, geokodirani CSV-ovi
+# ---------------------------------------------------------------------------
+
+GTFS_URL = "https://www.zet.hr/gtfs-scheduled/latest"
+NOMINATIM = "https://nominatim.openstreetmap.org/search"
+ZRAK_PAKETI = {
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-dordiceva-2023": "Đorđićeva ulica",
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-ksaver-2023": "Ksaverska cesta",
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-siget-2023": "Siget",
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-pescenica-2023": "Peščenica",
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-susedgrad-2023": "Susedgrad",
+    "podaci-o-kvaliteti-zraka-u-gradu-zagrebu-prilaz-baruna-filipovica-2023": "Prilaz baruna Filipovića",
+}
+
+
+def _dekodiraj(raw: bytes) -> str:
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig")
+    for enc in ("utf-8", "cp1250", "iso-8859-2"):
+        try:
+            t = raw.decode(enc)
+            if "\ufffd" not in t[:800]:
+                return t
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _xlsx_redovi(raw: bytes) -> list[list[str]]:
+    """Minimalni čitač .xlsx (prvi list s 'Datum' u zaglavlju)."""
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    z = zipfile.ZipFile(BytesIO(raw))
+    strings: list[str] = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+        for si in root.findall("m:si", ns):
+            strings.append("".join(t.text or "" for t in si.findall(".//m:t", ns)))
+
+    def colrow(ref: str) -> tuple[int, int]:
+        m = re.match(r"([A-Z]+)(\d+)", ref or "")
+        if not m:
+            return 0, 0
+        n = 0
+        for c in m.group(1):
+            n = n * 26 + (ord(c) - 64)
+        return n, int(m.group(2))
+
+    sheets = [n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+    best: list[list[str]] = []
+    for name in sheets:
+        root = ET.fromstring(z.read(name))
+        grid: dict[tuple[int, int], str] = {}
+        max_c = 0
+        max_r = 0
+        for c in root.findall(".//m:c", ns):
+            ref = c.get("r") or ""
+            col, row = colrow(ref)
+            if not col:
+                continue
+            v = c.find("m:v", ns)
+            if v is None or v.text is None:
+                continue
+            val = strings[int(float(v.text))] if c.get("t") == "s" else v.text
+            grid[(row, col)] = val
+            max_c = max(max_c, col)
+            max_r = max(max_r, row)
+        if max_r < 2:
+            continue
+        redovi = [[grid.get((r, c), "") for c in range(1, max_c + 1)] for r in range(1, max_r + 1)]
+        hdr = " ".join(redovi[0]).lower()
+        if "datum" in hdr and len(redovi) > len(best):
+            best = redovi
+        elif not best:
+            best = redovi
+    return best
+
+
+def _excel_datum(v: str) -> date | None:
+    v = (v or "").strip()
+    if not v:
+        return None
+    if re.match(r"^\d{4}-\d{2}-\d{2}", v):
+        y, m, d = (int(x) for x in v[:10].split("-"))
+        return date(y, m, d)
     try:
-        r = httpx.get(f"{CKAN_API}/package_show", params={"id": meta.paket_id}, timeout=60, follow_redirects=True)
+        n = int(float(v.replace(",", ".")))
+    except ValueError:
+        return None
+    if n < 20000 or n > 60000:
+        return None
+    return date(1899, 12, 30) + timedelta(days=n)
+
+
+def geokod_nominatim(conn: psycopg.Connection, upit: str) -> tuple[float, float] | None:
+    """Best-effort točka u Zagrebu; predmemorija u meta.geokod. 1 zahtjev/s prema Nominatimu."""
+    upit = re.sub(r"\s+", " ", upit).strip()
+    if len(upit) < 4:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT lon, lat FROM meta.geokod WHERE upit = %s", (upit,))
+        row = cur.fetchone()
+        if row:
+            return (row[0], row[1]) if row[0] is not None and row[1] is not None else None
+    time.sleep(1.05)
+    try:
+        r = httpx.get(
+            NOMINATIM,
+            params={
+                "q": upit,
+                "format": "jsonv2",
+                "limit": 1,
+                "countrycodes": "hr",
+                "viewbox": "15.6,46.05,16.4,45.6",
+            },
+            headers=UA,
+            timeout=30,
+        )
+        r.raise_for_status()
+        hits = r.json()
+        lon = lat = None
+        if hits:
+            lon, lat = float(hits[0]["lon"]), float(hits[0]["lat"])
+            if not u_zagrebu(lon, lat):
+                lon = lat = None
+    except Exception as e:  # noqa: BLE001
+        print(f"  (geokod '{upit[:40]}': {type(e).__name__})")
+        lon = lat = None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO meta.geokod (upit, lon, lat, izvor)
+            VALUES (%s, %s, %s, 'nominatim')
+            ON CONFLICT (upit) DO UPDATE SET lon = EXCLUDED.lon, lat = EXCLUDED.lat, fetched_at = now()
+            """,
+            (upit, lon, lat),
+        )
+    conn.commit()
+    return (lon, lat) if lon is not None and lat is not None else None
+
+
+def geokod_raskrize(conn: psycopg.Connection, ulice: list[str]) -> tuple[float, float] | None:
+    """Sjecište dviju ulica preko Overpassa, inače Nominatim prve ulice."""
+    cisti = [re.sub(r"\s+", " ", u).strip() for u in ulice if u.strip()]
+    if not cisti:
+        return None
+    kljuc = " ∩ ".join(cisti)
+    with conn.cursor() as cur:
+        cur.execute("SELECT lon, lat FROM meta.geokod WHERE upit = %s", (kljuc,))
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            return (row[0], row[1])
+        if row and row[0] is None:
+            pass  # stari promašaj — pokušaj opet s Overpassom
+    if len(cisti) >= 2:
+        def rx(s: str) -> str:
+            s = re.sub(r"^\s*(ulica|ul\.|cesta|trg|prilaz)\s+", "", s, flags=re.I)
+            jezgra = (s.split() or [s])[0][:10]
+            return re.sub(r"[^\wčćšžđČĆŠŽĐ]", ".", jezgra)
+
+        q = (
+            '[out:json][timeout:20];'
+            f'way(45.68,15.72,45.98,16.28)["highway"]["name"~"{rx(cisti[0])}",i]->.a;'
+            f'way(45.68,15.72,45.98,16.28)["highway"]["name"~"{rx(cisti[1])}",i]->.b;'
+            'node(w.a)(w.b); out 1;'
+        )
+        try:
+            time.sleep(1.05)
+            r = httpx.post(
+                "https://overpass-api.de/api/interpreter",
+                content=q.encode("utf-8"),
+                headers={**UA, "Content-Type": "text/plain; charset=utf-8"},
+                timeout=40,
+            )
+            r.raise_for_status()
+            els = (r.json() or {}).get("elements") or []
+            if els and "lon" in els[0]:
+                lon, lat = float(els[0]["lon"]), float(els[0]["lat"])
+                if u_zagrebu(lon, lat):
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO meta.geokod (upit, lon, lat, izvor)
+                            VALUES (%s, %s, %s, 'overpass')
+                            ON CONFLICT (upit) DO UPDATE SET lon = EXCLUDED.lon, lat = EXCLUDED.lat,
+                                izvor = EXCLUDED.izvor, fetched_at = now()
+                            """,
+                            (kljuc, lon, lat),
+                        )
+                    conn.commit()
+                    return (lon, lat)
+        except Exception as e:  # noqa: BLE001
+            print(f"  (overpass '{kljuc[:40]}': {type(e).__name__})")
+    pt = geokod_nominatim(conn, f"{cisti[0]}, Zagreb")
+    if pt:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO meta.geokod (upit, lon, lat, izvor)
+                VALUES (%s, %s, %s, 'nominatim-ulica')
+                ON CONFLICT (upit) DO UPDATE SET lon = EXCLUDED.lon, lat = EXCLUDED.lat,
+                    izvor = EXCLUDED.izvor, fetched_at = now()
+                """,
+                (kljuc, pt[0], pt[1]),
+            )
+        conn.commit()
+    return pt
+
+
+def toccka_iz_adrese(conn: psycopg.Connection, adresa: str, naziv: str = "") -> dict | None:
+    """Geometrija postojećeg objekta s istom ulicom i kućnim brojem, inače None."""
+    if not (adresa or "").strip():
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ST_AsGeoJSON(geom)
+            FROM geo.objekt
+            WHERE adresa IS NOT NULL
+              AND geo.kucni_broj(adresa) <> ''
+              AND geo.kucni_broj(adresa) = geo.kucni_broj(%s)
+              AND geo.ulica_norm(adresa) = geo.ulica_norm(%s)
+            ORDER BY similarity(unaccent(lower(coalesce(naziv,''))), unaccent(lower(%s))) DESC NULLS LAST
+            LIMIT 1
+            """,
+            (adresa, adresa, naziv or adresa),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return json.loads(row[0])
+
+
+def sync_signalizatori(conn: psycopg.Connection, meta: Skup) -> None:
+    recs = citaj_csv(preuzmi_tekst(meta, "data.csv"))
+    rows = []
+    bez = 0
+    for i, r in enumerate(recs, start=1):
+        raskrize = (r.get("NAZIV RASKRIŽJA") or r.get("NAZIV RASKRIZJA") or "").strip()
+        if not raskrize:
+            continue
+        n_ur = r.get("BROJ UREĐAJA") or r.get("BROJ UREDAJA") or ""
+        ulice = re.split(r"\s*[-–/]\s*", raskrize)
+        pt = geokod_raskrize(conn, ulice)
+        if not pt:
+            bez += 1
+            continue
+        geom = {"type": "Point", "coordinates": [pt[0], pt[1]]}
+        attrs = {"vrsta": "zvučni signalizator", "broj_uredaja": str(n_ur).strip() or None}
+        rows.append(
+            (
+                meta.sifra,
+                str(i),
+                meta.tip,
+                raskrize.title(),
+                raskrize,
+                json.dumps(geom),
+                json.dumps({k: v for k, v in attrs.items() if v}, ensure_ascii=False),
+            )
+        )
+    zamijeni_objekte(conn, meta.sifra, rows)
+    nap = f"geokodirano={len(rows)}; bez_koordinate={bez}"
+    zavrsi_skup(conn, meta.sifra, len(rows), nap)
+    print(f"Učitano {len(rows)} signalizatora · {nap}")
+
+
+def sync_zeleni_otoci(conn: psycopg.Connection, meta: Skup) -> None:
+    recs = citaj_csv(preuzmi_tekst(meta, "data.csv"))
+    rows = []
+    bez = 0
+    for i, r in enumerate(recs, start=1):
+        ulica = (r.get("ULICA") or "").strip()
+        opis = (r.get("LOKACIJA (OPIS)") or r.get("LOKACIJA") or "").strip()
+        cetvrt = (r.get("GRADSKA ČETVRT") or r.get("GRADSKA CETVRT") or "").strip()
+        if not ulica and not opis:
+            continue
+        naziv = ulica or opis
+        geom_obj = toccka_iz_adrese(conn, ulica, naziv)
+        if not geom_obj:
+            upit = f"{ulica}, {cetvrt}, Zagreb" if cetvrt else f"{ulica}, Zagreb"
+            pt = geokod_nominatim(conn, upit)
+            if not pt:
+                bez += 1
+                continue
+            geom_obj = {"type": "Point", "coordinates": [pt[0], pt[1]]}
+        attrs = {"vrsta": "zeleni otok", "opis": opis or None, "cetvrt_naziv": cetvrt or None}
+        rows.append(
+            (
+                meta.sifra,
+                str(i),
+                meta.tip,
+                naziv,
+                ulica or None,
+                json.dumps(geom_obj),
+                json.dumps({k: v for k, v in attrs.items() if v}, ensure_ascii=False),
+            )
+        )
+    zamijeni_objekte(conn, meta.sifra, rows)
+    nap = f"tocaka={len(rows)}; bez_koordinate={bez}"
+    zavrsi_skup(conn, meta.sifra, len(rows), nap)
+    print(f"Učitano {len(rows)} zelenih otoka · {nap}")
+
+
+def sync_odgojno(conn: psycopg.Connection, meta: Skup) -> None:
+    recs = citaj_csv(preuzmi_tekst(meta, "data.csv"))
+    rows = []
+    bez = 0
+    for i, r in enumerate(recs, start=1):
+        naziv = (r.get("Ustanova") or "").strip()
+        adresa = (r.get("Adresa ustanove") or "").strip()
+        if not naziv:
+            continue
+        geom_obj = toccka_iz_adrese(conn, adresa, naziv) if adresa else None
+        if not geom_obj and adresa:
+            pt = geokod_nominatim(conn, f"{adresa}, Zagreb, Hrvatska")
+            if pt:
+                geom_obj = {"type": "Point", "coordinates": [pt[0], pt[1]]}
+        if not geom_obj:
+            bez += 1
+            continue
+        attrs = {
+            "vrsta": (r.get("Tip ustanove") or r.get("Vrsta programa/ ustanove") or "").strip() or None,
+            "osnivac": (r.get("Osnivač") or r.get("Osnivac") or "").strip() or None,
+            "maticni_podrucni": (r.get("Matični/ područni") or "").strip() or None,
+            "maticna": (r.get("Matična ustanova") or "").strip() or None,
+            "cetvrt_naziv": (r.get("Gradska četvrt_U") or "").strip() or None,
+        }
+        rows.append(
+            (
+                meta.sifra,
+                str(i),
+                meta.tip,
+                naziv,
+                adresa or None,
+                json.dumps(geom_obj),
+                json.dumps({k: v for k, v in attrs.items() if v}, ensure_ascii=False),
+            )
+        )
+    zamijeni_objekte(conn, meta.sifra, rows)
+    nap = f"sa_geometrijom={len(rows)}; bez_koordinate={bez}"
+    zavrsi_skup(conn, meta.sifra, len(rows), nap)
+    print(f"Učitano {len(rows)} odgojno-obrazovnih · {nap}")
+
+
+def sync_gtfs(conn: psycopg.Connection, meta: Skup) -> None:
+    path = DATA_DIR / meta.sifra / "gtfs.zip"
+    print(f"Preuzimam {GTFS_URL}")
+    download(GTFS_URL, path)
+    with zipfile.ZipFile(path) as z:
+        def citaj(ime: str) -> list[dict]:
+            with z.open(ime) as fh:
+                return list(csv.DictReader(TextIOWrapper(fh, encoding="utf-8-sig")))
+
+        rute = {r["route_id"]: r for r in citaj("routes.txt")}
+        trips = citaj("trips.txt")
+        # shape_id → točke
+        tocke: dict[str, list[tuple[int, float, float]]] = {}
+        with z.open("shapes.txt") as fh:
+            rdr = csv.DictReader(TextIOWrapper(fh, encoding="utf-8-sig"))
+            for row in rdr:
+                sid = (row.get("shape_id") or "").strip().strip('"')
+                try:
+                    lat = float(row["shape_pt_lat"])
+                    lon = float(row["shape_pt_lon"])
+                    seq = int(float(row["shape_pt_sequence"]))
+                except (KeyError, ValueError):
+                    continue
+                tocke.setdefault(sid, []).append((seq, lon, lat))
+        info = {}
+        if "feed_info.txt" in z.namelist():
+            inf = citaj("feed_info.txt")
+            info = inf[0] if inf else {}
+
+    # jedan shape po (ruta, smjer) — onaj s najviše točaka
+    najbolji: dict[tuple[str, str], tuple[str, int]] = {}
+    for t in trips:
+        rid, sid = t.get("route_id"), (t.get("shape_id") or "").strip().strip('"')
+        if not rid or not sid or sid not in tocke:
+            continue
+        smjer = t.get("direction_id") or "0"
+        n = len(tocke[sid])
+        kljuc = (rid, smjer)
+        if kljuc not in najbolji or n > najbolji[kljuc][1]:
+            najbolji[kljuc] = (sid, n)
+
+    rows = []
+    for (rid, smjer), (sid, _) in najbolji.items():
+        r = rute.get(rid) or {}
+        pts = [(lon, lat) for _, lon, lat in sorted(tocke[sid])]
+        if len(pts) < 2:
+            continue
+        geom = {"type": "LineString", "coordinates": pts}
+        kratki = (r.get("route_short_name") or rid).strip().strip('"')
+        dugi = (r.get("route_long_name") or "").strip().strip('"')
+        tip_gtfs = (r.get("route_type") or "").strip()
+        vrsta = "tramvaj" if tip_gtfs == "0" else "autobus" if tip_gtfs == "3" else f"gtfs-{tip_gtfs}"
+        naziv = f"{kratki} · {dugi}" if dugi else kratki
+        attrs = {
+            "vrsta": vrsta,
+            "linija": kratki,
+            "smjer": smjer,
+            "route_id": rid,
+            "route_type": tip_gtfs,
+        }
+        rows.append(
+            (
+                meta.sifra,
+                f"{rid}:{smjer}",
+                meta.tip,
+                naziv,
+                dugi or None,
+                json.dumps(geom),
+                json.dumps(attrs, ensure_ascii=False),
+            )
+        )
+    zamijeni_objekte(conn, meta.sifra, rows)
+    nap = (
+        f"rute={len(rute)}; linija_na_karti={len(rows)}; "
+        f"feed={info.get('feed_start_date','')}–{info.get('feed_end_date','')}"
+    )
+    zavrsi_skup(conn, meta.sifra, len(rows), nap)
+    print(f"Učitano {len(rows)} GTFS linija · {nap}")
+
+
+def sync_asset_lista(conn: psycopg.Connection, meta: Skup) -> None:
+    """Katalog E: CKAN paketi (što je na Portalu) + retci asset liste koji nisu CKAN."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT sifra, paket_id, ckan_url, naziv FROM meta.skup")
+        atlas = list(cur.fetchall())
+    po_paketu = {p: s for s, p, _, _ in atlas if p}
+    po_nazivu = {kljuc_jedinice(n): s for s, _, _, n in atlas if n}
+
+    paketi: list[dict] = []
+    start = 0
+    while True:
+        r = httpx.get(
+            f"{CKAN_API}/package_search",
+            params={"rows": 100, "start": start},
+            timeout=60,
+            headers=UA,
+            follow_redirects=True,
+        )
+        r.raise_for_status()
+        rez = r.json()["result"]
+        paketi.extend(rez.get("results") or [])
+        if start + 100 >= int(rez.get("count") or 0):
+            break
+        start += 100
+
+    rows = []
+    videni: set[str] = set()
+    for p in paketi:
+        name = p.get("name") or ""
+        if not name or name in videni:
+            continue
+        videni.add(name)
+        sifra = po_paketu.get(name)
+        stanje = "u_atlasu" if sifra else "nije_u_atlasu"
+        org = (p.get("organization") or {}).get("title")
+        rows.append(
+            (
+                p.get("title") or name,
+                (p.get("notes") or "").strip()[:2000] or None,
+                org,
+                f"https://data.zagreb.hr/dataset/{name}",
+                p.get("license_title") or p.get("license_id"),
+                name,
+                sifra,
+                stanje,
+            )
+        )
+
+    recs = citaj_csv(preuzmi_tekst(meta, "data.csv", ime_sadrzi="2025"))
+    for r in recs:
+        naziv = (r.get("NAZIV SKUPA PODATAKA") or r.get("Naziv") or "").strip()
+        if not naziv:
+            continue
+        poveznica = (r.get("POVEZNICA") or "").strip()
+        if not poveznica.startswith("http"):
+            for v in r.values():
+                if isinstance(v, str) and "data.zagreb.hr/dataset/" in v:
+                    poveznica = v.strip()
+                    break
+        m = re.search(r"data\.zagreb\.hr/dataset/([^/?#]+)", poveznica or "", re.I)
+        paket = m.group(1) if m else None
+        if paket and paket in videni:
+            continue
+        sifra = po_paketu.get(paket or "") or po_nazivu.get(kljuc_jedinice(naziv))
+        if sifra:
+            stanje = "u_atlasu"
+        elif paket:
+            stanje = "nije_u_atlasu"
+        else:
+            stanje = "nije_ckan"
+        if paket:
+            videni.add(paket)
+        rows.append(
+            (
+                naziv,
+                (r.get("KRATAK OPIS SKUPA PODATAKA") or "").strip() or None,
+                (r.get("UČESTALOST OBJAVE/AŽURIRANJA") or "").strip() or None,
+                poveznica or None,
+                (r.get("UVJETI KORIŠTENJA (DOZVOLE)") or "").strip() or None,
+                paket,
+                sifra,
+                stanje,
+            )
+        )
+
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM meta.portal_skup")
+        cur.executemany(
+            """
+            INSERT INTO meta.portal_skup
+                (naziv, opis, ucestalost, poveznica, uvjeti, paket_id, atlas_sifra, stanje)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            rows,
+        )
+    conn.commit()
+    n_u = sum(1 for x in rows if x[7] == "u_atlasu")
+    nap = (
+        f"portal={len(rows)}; ckan={len(paketi)}; u_atlasu={n_u}; "
+        f"nije_u_atlasu={sum(1 for x in rows if x[7]=='nije_u_atlasu')}; "
+        f"nije_ckan={sum(1 for x in rows if x[7]=='nije_ckan')}"
+    )
+    zavrsi_skup(conn, meta.sifra, len(rows), nap)
+    print(f"Učitana asset lista · {nap}")
+
+
+def sync_zrak_2023(conn: psycopg.Connection, meta: Skup) -> None:
+    n_dat = 0
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM okolis.zrak_dan")
+    for paket, postaja in ZRAK_PAKETI.items():
+        try:
+            r = httpx.get(f"{CKAN_API}/package_show", params={"id": paket}, timeout=60, follow_redirects=True, headers=UA)
+            r.raise_for_status()
+            resursi = r.json()["result"].get("resources") or []
+        except Exception as e:  # noqa: BLE001
+            print(f"  (zrak {paket}: {type(e).__name__})")
+            continue
+        xlsx = [
+            res
+            for res in resursi
+            if (res.get("format") or "").upper() == "XLSX" and res.get("url")
+        ]
+        for res in xlsx:
+            dest = DATA_DIR / "zrak_2023" / f"{paket}-{res.get('id','x')}.xlsx"
+            try:
+                download(res["url"], dest)
+                tab = _xlsx_redovi(dest.read_bytes())
+            except Exception as e:  # noqa: BLE001
+                print(f"  (zrak datoteka {res.get('name')}: {type(e).__name__})")
+                continue
+            if not tab:
+                continue
+            hdr = tab[0]
+            stupci = []
+            for i, h in enumerate(hdr):
+                h = (h or "").strip()
+                if i == 0:
+                    continue
+                m = re.match(r"(.+?)\s*\[(.+?)\]", h)
+                if m:
+                    stupci.append((i, m.group(1).strip(), m.group(2).strip()))
+                elif h:
+                    stupci.append((i, h, None))
+            batch = []
+            for red in tab[1:]:
+                d = _excel_datum(red[0] if red else "")
+                if not d or d.year != 2023:
+                    continue
+                for i, pol, jed in stupci:
+                    if i >= len(red) or not str(red[i]).strip():
+                        continue
+                    try:
+                        val = float(str(red[i]).replace(",", "."))
+                    except ValueError:
+                        continue
+                    batch.append((postaja, paket, d, pol, jed, val))
+            if batch:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """
+                        INSERT INTO okolis.zrak_dan (postaja, paket_id, datum, polutant, jedinica, vrijednost)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (postaja, datum, polutant) DO UPDATE SET vrijednost = EXCLUDED.vrijednost
+                        """,
+                        batch,
+                    )
+                conn.commit()
+                n_dat += len({b[2] for b in batch})
+        print(f"  zrak {postaja}: OK")
+
+    # sažetak 2023. na pinove postaja
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT postaja,
+                   avg(vrijednost) FILTER (WHERE polutant ILIKE 'PM10%') AS pm10,
+                   avg(vrijednost) FILTER (WHERE polutant ILIKE 'NO2%') AS no2,
+                   count(*) FILTER (WHERE polutant ILIKE 'PM10%' AND vrijednost > 50) AS dana_pm10_50
+            FROM okolis.zrak_dan GROUP BY postaja
+            """
+        )
+        sazetak = {p: (pm10, no2, n50) for p, pm10, no2, n50 in cur.fetchall()}
+        cur.execute("SELECT id, naziv, attrs FROM geo.objekt WHERE skup_sifra = 'kvaliteta_zraka'")
+        for oid, naziv, attrs in cur.fetchall():
+            hit = None
+            nlow = unaccent_simple(naziv or "")
+            for postaja, v in sazetak.items():
+                if unaccent_simple(postaja) in nlow or nlow in unaccent_simple(postaja):
+                    hit = (postaja, v)
+                    break
+            if not hit:
+                continue
+            postaja, (pm10, no2, n50) = hit
+            a = dict(attrs or {})
+            a["zrak_2023_postaja"] = postaja
+            if pm10 is not None:
+                a["pm10_2023_srednje"] = round(float(pm10), 1)
+            if no2 is not None:
+                a["no2_2023_srednje"] = round(float(no2), 1)
+            a["dana_pm10_preko_50_2023"] = int(n50 or 0)
+            cur.execute("UPDATE geo.objekt SET attrs = %s::jsonb WHERE id = %s", (json.dumps(a, ensure_ascii=False), oid))
+    conn.commit()
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM okolis.zrak_dan")
+        n = cur.fetchone()[0]
+    nap = f"dnevnih_mjerenja={n}; postaja={len(ZRAK_PAKETI)}"
+    zavrsi_skup(conn, meta.sifra, n, nap)
+    print(f"Učitano {n} dnevnih mjerenja zraka 2023. · {nap}")
+
+
+def unaccent_simple(s: str) -> str:
+    t = (s or "").lower()
+    for a, b in (("č", "c"), ("ć", "c"), ("š", "s"), ("ž", "z"), ("đ", "d"), ("ö", "o")):
+        t = t.replace(a, b)
+    return t
+
+
+def osvjezi_ckan_meta(conn: psycopg.Connection, meta: Skup) -> None:
+    """CKAN package_show: resursi, licenca, izdavač, datum izmjene (katalog E)."""
+    if not meta.ckan or not meta.paket_id:
+        return
+    try:
+        r = httpx.get(
+            f"{CKAN_API}/package_show",
+            params={"id": meta.paket_id},
+            timeout=60,
+            follow_redirects=True,
+            headers=UA,
+        )
         r.raise_for_status()
         p = r.json()["result"]
     except Exception as e:  # noqa: BLE001 — metapodaci nisu kritični za ingest
@@ -1444,6 +2172,12 @@ HANDLERI: dict[str, Callable[[psycopg.Connection, Skup], None]] = {
     "predsjednici_mo": sync_predsjednici_mo,
     "clanovi_vijeca": sync_clanovi_vijeca,
     "prostori_ms": sync_prostori_ms,
+    "signalizatori": sync_signalizatori,
+    "zeleni_otoci": sync_zeleni_otoci,
+    "odgojno": sync_odgojno,
+    "gtfs": sync_gtfs,
+    "asset_lista": sync_asset_lista,
+    "zrak_2023": sync_zrak_2023,
 }
 
 

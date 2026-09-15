@@ -27,10 +27,18 @@ services:
   web:
     build: ./web
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       DATABASE_URL: postgresql://atlas:${POSTGRES_PASSWORD:-atlas}@db:5432/atlas
       JAVNI_URL: ${JAVNI_URL:-https://zg-atlas.lakehouse.hr}
       PGPOOL_MAX: "10"
+      NODE_OPTIONS: "--max-old-space-size=512"
     ports:
       - "127.0.0.1:3200:3000"
     depends_on:
@@ -47,6 +55,10 @@ services:
   ingest:
     build: ./ingest
     user: "${INGEST_UID:-1000}:${INGEST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       DATABASE_URL: postgresql://atlas:${POSTGRES_PASSWORD:-atlas}@db:5432/atlas
       DATA_DIR: /data
@@ -62,6 +74,10 @@ services:
     build: ./ingest
     restart: unless-stopped
     user: "${INGEST_UID:-1000}:${INGEST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       DATABASE_URL: postgresql://atlas:${POSTGRES_PASSWORD:-atlas}@db:5432/atlas
       DATA_DIR: /data
@@ -76,7 +92,7 @@ services:
         if [ "$$(date +%H)" = "05" ]; then python sync.py --nastavi --skupovi prostori_ms || true; fi;
         if [ "$$(date +%d)" = "01" ] && [ "$$(date +%H)" = "03" ]; then python sync.py --nastavi --skupovi javni_zdenci tema:mobilnost || true; fi;
         if [ "$$(date +%d)" = "02" ] && [ "$$(date +%H)" = "03" ]; then python sync.py --nastavi --skupovi isge || true; fi;
-        if [ "$$(date +%u)" = "1" ] && [ "$$(date +%H)" = "04" ]; then python sync.py --nastavi --skupovi vrtici privatni_vrtici || true; fi;
+        if [ "$$(date +%u)" = "1" ] && [ "$$(date +%H)" = "04" ]; then python sync.py --nastavi --skupovi vrtici privatni_vrtici gtfs_rute || true; fi;
         if [ "$$(date +%u)" = "1" ] && [ "$$(date +%H)" = "06" ]; then python sync.py --nastavi --samo-meta || true; fi;
         sleep 3600;
       done'

@@ -80,6 +80,41 @@ export async function ucitajTablicu(sifra: string): Promise<{ stupci: string[]; 
                      FROM energy.potrosnja p JOIN energy.objekt e ON e.id = p.objekt_id
                      LEFT JOIN geo.cetvrt c ON c.id = e.cetvrt_id
                      ORDER BY e.naziv, p.godina, p.mjesec, p.energent`,
+    asset_lista: `SELECT naziv, stanje, atlas_sifra, paket_id, poveznica, ucestalost, uvjeti, left(opis, 400) AS opis
+                  FROM meta.portal_skup ORDER BY stanje, naziv`,
+    zrak_2023: `SELECT postaja, datum, polutant, jedinica, vrijednost
+                FROM okolis.zrak_dan ORDER BY postaja, datum, polutant`,
+    gold_objekti: `SELECT o.id, o.skup_sifra AS skup, o.tip, o.naziv, o.adresa,
+                          c.naziv AS cetvrt, m.naziv AS mo,
+                          o.attrs->>'telefon' AS telefon, o.attrs->>'email' AS email, o.attrs->>'web' AS web,
+                          round(ST_X(ST_PointOnSurface(o.geom))::numeric, 6) AS lon,
+                          round(ST_Y(ST_PointOnSurface(o.geom))::numeric, 6) AS lat,
+                          e.id AS energy_id, e.pouzdanost AS isge_pouzdanost
+                   FROM geo.objekt o
+                   LEFT JOIN geo.cetvrt c ON c.id = o.cetvrt_id
+                   LEFT JOIN geo.mo m ON m.id = o.mo_id
+                   LEFT JOIN LATERAL (
+                     SELECT id, pouzdanost FROM energy.objekt
+                     WHERE geo_objekt_id = o.id
+                     ORDER BY CASE pouzdanost WHEN 'visoka' THEN 0 WHEN 'srednja' THEN 1 ELSE 2 END, id
+                     LIMIT 1
+                   ) e ON true
+                   ORDER BY o.skup_sifra, o.naziv NULLS LAST, o.id`,
+    gold_isge_godina: `SELECT e.id AS objekt_id, e.naziv, e.adresa, c.naziv AS cetvrt,
+                              e.geo_skup AS namjena, e.pouzdanost, p.godina,
+                              round(coalesce(sum(p.kwh) FILTER (WHERE p.energent <> 'Voda'), 0)) AS kwh,
+                              round(coalesce(sum(p.eur), 0)::numeric, 2) AS eur
+                       FROM energy.objekt e
+                       JOIN energy.potrosnja p ON p.objekt_id = e.id
+                       LEFT JOIN geo.cetvrt c ON c.id = e.cetvrt_id
+                       WHERE p.godina BETWEEN 2019 AND 2023
+                       GROUP BY e.id, e.naziv, e.adresa, c.naziv, e.geo_skup, e.pouzdanost, p.godina
+                       ORDER BY e.naziv, p.godina`,
+    gold_inventar_cetvrt: `SELECT c.naziv AS cetvrt, o.skup_sifra AS skup, o.tip, count(*)::int AS n
+                           FROM geo.objekt o
+                           JOIN geo.cetvrt c ON c.id = o.cetvrt_id
+                           GROUP BY c.naziv, o.skup_sifra, o.tip
+                           ORDER BY c.naziv, o.skup_sifra`,
   };
   const sql = upiti[sifra];
   if (!sql) return null;
@@ -92,6 +127,31 @@ export const TABLICE_DODATNE: { sifra: string; naziv: string; opis: string }[] =
   {
     sifra: "isge_potrosnja",
     naziv: "ISGE — mjesečna potrošnja (svi objekti)",
-    opis: "Objekt × energent × mjesec, agregirano iz mjernih mjesta; ~190 tisuća redaka.",
+    opis: "Objekt × energent × mjesec, agregirano iz mjernih mjesta; ~190 tisuća redaka. Samo CSV.",
+  },
+  {
+    sifra: "asset_lista",
+    naziv: "Asset lista Portala vs. Atlas",
+    opis: "Što Grad objavljuje i je li učitano u Atlas.",
+  },
+  {
+    sifra: "zrak_2023",
+    naziv: "Kvaliteta zraka 2023. (dnevno)",
+    opis: "Šest postaja, dnevni NO2 / ozon / PM10.",
+  },
+  {
+    sifra: "gold_objekti",
+    naziv: "Gold — objekti (kanonska polja)",
+    opis: "Svi objekti s četvrti, MO, lon/lat i ISGE spojem ako postoji. Samo CSV.",
+  },
+  {
+    sifra: "gold_isge_godina",
+    naziv: "Gold — ISGE po godini",
+    opis: "Objekt × godina: kWh (bez vode) i €, 2019.–2023. Samo CSV.",
+  },
+  {
+    sifra: "gold_inventar_cetvrt",
+    naziv: "Gold — inventar četvrti",
+    opis: "Broj objekata po četvrti, sloju i tipu.",
   },
 ];

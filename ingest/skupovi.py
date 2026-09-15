@@ -75,9 +75,16 @@ class Skup:
     polja: dict[str, tuple[str, ...]] = field(default_factory=lambda: dict(GEOPORTAL_POLJA))
     # tocka | linija | poligon | tablica — kako se prikazuje na karti (tablica = nije na karti)
     geometrija: str = "tocka"
+    # False = nije CKAN paket (npr. ZET GTFS); izvor_url pregaže ckan_url
+    ckan: bool = True
+    izvor_url: str = ""
 
     @property
     def ckan_url(self) -> str:
+        if self.izvor_url:
+            return self.izvor_url
+        if not self.ckan or not self.paket_id:
+            return ""
         return f"https://data.zagreb.hr/dataset/{self.paket_id}"
 
 
@@ -600,5 +607,107 @@ SKUPOVI: dict[str, Skup] = {
     ),
     "policija": _geoportal(
         "policija", "geoportal-policija", "Geoportal Policija", "usluge", "policija"
+    ),
+    # ---- korpus v1.3 koji je nedostajao ----
+    "javni_wc": _geoportal(
+        "javni_wc",
+        "javni-wc-i",
+        "Javni WC-i",
+        "usluge",
+        "javni_wc",
+        napomena="Lokacije javnih WC-a; Geoportal / CKAN.",
+        polja={"naziv": ("naziv", "Naziv", "NAZIV"), "adresa": ("adresa", "Adresa", "ADRESA")},
+        azurnost="godina",
+    ),
+    "pojilice": _geoportal(
+        "pojilice",
+        "pojilice-sa-pitkom-vodom",
+        "Pojilice s pitkom vodom",
+        "okolis",
+        "pojilica",
+        napomena="Lokacije pojilica; CKAN GeoJSON.",
+        polja={"naziv": ("naziv", "Naziv", "NAZIV", "lokacija"), "adresa": ("adresa", "Adresa", "ADRESA", "lokacija")},
+        azurnost="godina",
+    ),
+    "pjesacke_zone": _geoportal(
+        "pjesacke_zone",
+        "geoportal-pjesacka-zona",
+        "Geoportal pješačke zone",
+        "mobilnost",
+        "pjesacka_zona",
+        napomena="Poligoni pješačkih zona (MultiPolygon izvora rastavljen na dijelove); presjek s dnevnim zatvaranjima u inspectoru.",
+        polja={"naziv": ("naziv", "Naziv", "NAZIV"), "adresa": ()},
+        geometrija="poligon",
+        azurnost="starija_snimka",
+    ),
+    "signalizatori": Skup(
+        sifra="signalizatori",
+        paket_id="raskrizja-sa-zvucnim-signalizatorima",
+        naziv="Raskrižja sa zvučnim signalizatorima",
+        azurnost="godina",
+        handler="signalizatori",
+        tema="usluge",
+        tip="signalizator",
+        preferirani_format="CSV",
+        napomena="Tablica raskrižja (2024.); točke su geokodirane iz naziva raskrižja (best-effort).",
+    ),
+    "zeleni_otoci": Skup(
+        sifra="zeleni_otoci",
+        paket_id="lokacije-zelenih-otoka",
+        naziv="Lokacije zelenih otoka (2016.)",
+        azurnost="starija_snimka",
+        handler="zeleni_otoci",
+        tema="okolis",
+        tip="zeleni_otok",
+        preferirani_format="CSV",
+        napomena="Arhivski dump; točke geokodirane iz adrese/ulice (best-effort).",
+    ),
+    "odgojno": Skup(
+        sifra="odgojno",
+        paket_id="odgojno-obrazovni-objekti-grada-zagreba",
+        naziv="Odgojno-obrazovni objekti Grada Zagreba",
+        azurnost="godina",
+        handler="odgojno",
+        tema="obrazovanje",
+        tip="odgojno",
+        preferirani_format="CSV",
+        napomena="Registar ustanova (vrtići, škole…); geometrija iz spoja na Geoportal/vrtiće ili geokod adrese.",
+    ),
+    "zrak_2023": Skup(
+        sifra="zrak_2023",
+        paket_id="podaci-o-kvaliteti-zraka-u-gradu-zagrebu-dordiceva-2023",
+        naziv="Kvaliteta zraka 2023. (dnevna mjerenja)",
+        azurnost="starija_snimka",
+        handler="zrak_2023",
+        tema="okolis",
+        preferirani_format="XLSX",
+        napomena="Arhiv šest mjernih postaja (CKAN, 2023.): dnevni NO2, ozon, PM10. Tablica, nije sloj pinova.",
+        geometrija="tablica",
+    ),
+    "asset_lista": Skup(
+        sifra="asset_lista",
+        paket_id="popis-skupova-podataka-grada-zagreba-asset-lista",
+        naziv="Popis skupova podataka Grada Zagreba (asset lista)",
+        azurnost="godina",
+        handler="asset_lista",
+        tema="meta",
+        preferirani_format="CSV",
+        napomena="Što Grad objavljuje vs. što je u Atlasu; katalog E.",
+        geometrija="tablica",
+    ),
+    "gtfs_rute": Skup(
+        sifra="gtfs_rute",
+        paket_id="zet-gtfs-static",
+        naziv="ZET — statične GTFS rute",
+        azurnost="tjedan",
+        handler="gtfs",
+        tema="mobilnost",
+        tip="gtfs_ruta",
+        preferirani_format="ZIP",
+        frekvencija="tjedno",
+        napomena="Statični raspored ZET-a (Otvorena dozvola RH): jedna linija po smjeru. Nije dolazak u stvarnom vremenu.",
+        geometrija="linija",
+        ckan=False,
+        izvor_url="https://www.zet.hr/gtfs-scheduled/latest",
     ),
 }

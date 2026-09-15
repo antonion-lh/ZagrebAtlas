@@ -25,7 +25,15 @@ const ATRIBUT: Record<string, string> = {
   zona: "Zona",
   naselje: "Naselje",
   kjuc: "Ključ",
-  objectid: "Identifikator izvora",
+  dana_pm10_preko_50_2023: "Dana PM10 > 50 µg/m³ (2023.)",
+  pm10_2023_srednje: "PM10 srednje 2023. (µg/m³)",
+  no2_2023_srednje: "NO2 srednje 2023. (µg/m³)",
+  zrak_2023_postaja: "Postaja (2023.)",
+  broj_uredaja: "Broj uređaja",
+  osnivac: "Osnivač",
+  maticna: "Matična ustanova",
+  route_id: "Oznaka rute",
+  route_type: "GTFS tip",
 };
 
 const SKRIVENO_DONJE = new Set([

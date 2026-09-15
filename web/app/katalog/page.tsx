@@ -1,5 +1,14 @@
 import type { Metadata } from "next";
-import { API_TOCKE, ucitajKatalog, type KatalogSkup } from "@/lib/katalog";
+import {
+  API_TOCKE,
+  BACKLOG,
+  ucitajIsgeSpoj,
+  ucitajKatalog,
+  ucitajPortalUsporedba,
+  type IsgeSpoj,
+  type KatalogSkup,
+  type PortalRed,
+} from "@/lib/katalog";
 import { AZURNOST, AZURNOST_OPIS, TEME, TIP_NAZIV, formatDatum } from "@/lib/slojevi-ui";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +36,7 @@ function Skup({ s }: { s: KatalogSkup }) {
   return (
     <article
       id={s.sifra}
+      className="katalog-skup"
       style={{
         borderTop: "1px solid var(--line)",
         padding: "0.85rem 0",
@@ -113,9 +123,15 @@ function Skup({ s }: { s: KatalogSkup }) {
 
 export default async function KatalogPage() {
   let skupovi: KatalogSkup[] = [];
+  let portal: PortalRed[] = [];
+  let spoj: IsgeSpoj | null = null;
   let greska: string | null = null;
   try {
-    skupovi = await ucitajKatalog();
+    [skupovi, portal, spoj] = await Promise.all([
+      ucitajKatalog(),
+      ucitajPortalUsporedba().catch(() => [] as PortalRed[]),
+      ucitajIsgeSpoj(),
+    ]);
   } catch (e) {
     greska = "Katalog se trenutačno ne može učitati.";
   }
@@ -146,6 +162,9 @@ export default async function KatalogPage() {
           </a>
         ))}
         <a href="#api">API</a>
+        <a href="#portal">Portal vs. Atlas</a>
+        <a href="#spoj">ISGE spoj</a>
+        <a href="#backlog">Backlog</a>
       </nav>
 
       <details style={{ margin: "0.75rem 0 1.25rem", fontSize: "0.92rem" }}>
@@ -174,12 +193,104 @@ export default async function KatalogPage() {
         ))
       )}
 
+      <section id="spoj" style={{ marginTop: "2.25rem" }}>
+        <h2>ISGE spoj na registar</h2>
+        {spoj ? (
+          <p style={{ fontSize: "0.92rem", lineHeight: 1.55 }}>
+            {spoj.spojeno.toLocaleString("hr-HR")} od {spoj.objekata.toLocaleString("hr-HR")} objekata (
+            {spoj.objekata ? Math.round((100 * spoj.spojeno) / spoj.objekata) : 0} %) spojenih na ustanove:
+            pouzdanost visoka {spoj.visoka}, srednja {spoj.srednja}, niska {spoj.niska}.{" "}
+            {spoj.napomena ? <span style={{ color: "var(--muted)" }}>{spoj.napomena}</span> : null} Metoda je u{" "}
+            <a href="/vodic#isge">vodiču</a>. Storno (negativne količine) isključeno je iz zbroja.
+          </p>
+        ) : (
+          <p style={{ color: "var(--muted)" }}>ISGE još nije učitan.</p>
+        )}
+      </section>
+
+      <section id="portal" style={{ marginTop: "2.25rem" }}>
+        <h2>Što Grad objavljuje, a što je u Atlasu</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, marginTop: 0 }}>
+          Asset lista Portala ({portal.length || "—"} redaka). U Atlasu su skupovi koji imaju geometriju ili
+          tablicu za dosje; ostali ostaju na data.zagreb.hr.{" "}
+          {portal.length ? (
+            <>
+              U Atlasu {portal.filter((p) => p.stanje === "u_atlasu").length}, na Portalu a ne u Atlasu{" "}
+              {portal.filter((p) => p.stanje === "nije_u_atlasu").length}, izvan CKAN-a{" "}
+              {portal.filter((p) => p.stanje === "nije_ckan").length}.
+            </>
+          ) : (
+            "Lista se učitava ingestom skupa asset_lista."
+          )}{" "}
+          <a href="/api/tablica/asset_lista?format=csv">CSV</a>.
+        </p>
+        {portal.length ? (
+          <div style={{ overflowX: "auto" }} tabIndex={0} role="region" aria-label="Portal vs Atlas">
+            <table className="tablica" style={{ fontSize: "0.86rem" }}>
+              <thead>
+                <tr>
+                  <th scope="col">Stanje</th>
+                  <th scope="col">Skup na Portalu</th>
+                  <th scope="col">U Atlasu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {portal.slice(0, 80).map((p, i) => (
+                  <tr key={`${p.paket_id || p.naziv}-${i}`}>
+                    <td data-oznaka="Stanje" style={{ whiteSpace: "nowrap" }}>
+                      {p.stanje === "u_atlasu" ? "u Atlasu" : p.stanje === "nije_ckan" ? "nije CKAN" : "nije u Atlasu"}
+                    </td>
+                    <td data-oznaka="Skup">
+                      {p.poveznica ? (
+                        <a href={p.poveznica} target="_blank" rel="noreferrer">
+                          {p.naziv}
+                        </a>
+                      ) : (
+                        p.naziv
+                      )}
+                    </td>
+                    <td data-oznaka="U Atlasu">
+                      {p.atlas_sifra ? <a href={`#${p.atlas_sifra}`}>{p.atlas_sifra}</a> : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {portal.length > 80 ? (
+              <p style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
+                Prikazano 80 od {portal.length}. Cijela tablica:{" "}
+                <a href="/api/tablica/asset_lista?format=csv">CSV</a>.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section id="backlog" style={{ marginTop: "2.25rem" }}>
+        <h2>Javni backlog (nije u v1)</h2>
+        <ul style={{ paddingLeft: "1.1rem", fontSize: "0.92rem", lineHeight: 1.55 }}>
+          {BACKLOG.map((b) => (
+            <li key={b.naziv}>
+              <strong>{b.naziv}.</strong> {b.razlog}
+            </li>
+          ))}
+        </ul>
+        <p style={{ fontSize: "0.92rem" }}>
+          Proračun i isplate:{" "}
+          <a href="https://transparentnost.zagreb.hr/" target="_blank" rel="noreferrer">
+            iTransparentnost
+          </a>{" "}
+          (zaseban servis, bez ingesta u Atlas).
+        </p>
+      </section>
+
       <section id="api" style={{ marginTop: "2.25rem" }}>
         <h2>Preuzimanja i programsko sučelje</h2>
         <p style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, marginTop: 0 }}>
           Sve što Atlas pokazuje može se i preuzeti, bez ključa. Odgovori se mogu predmemorirati (nose
           zaglavlje <code>Cache-Control</code>). Koordinate su WGS84 (EPSG:4326). CSV koristi točku-zarez
-          i UTF-8 s BOM-om.
+          i UTF-8 s BOM-om. Tablice <code>gold_*</code> su pročišćeni agregati (objekti, godišnji ISGE,
+          inventar četvrti) za ponovnu uporabu.
         </p>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
           <caption style={{ textAlign: "left", color: "var(--muted)", fontSize: "0.85rem", padding: "0.3rem 0" }}>

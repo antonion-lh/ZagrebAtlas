@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { dopusteno, klijentIp, limitZaPutanju } from "@/lib/ogranicenja";
 
-/** Predlet za otvoreni API: samo GET. Zaglavlja CORS-a dodaje next.config.ts. */
+const PORUKA_LIMIT = "Previše zahtjeva. Pokušajte ponovno za trenutak.";
+
+/** Predlet za otvoreni API: samo GET/OPTIONS + rate limit po IP. */
 export function middleware(req: NextRequest) {
-  if (req.method === "OPTIONS") {
+  const metoda = req.method.toUpperCase();
+
+  if (metoda === "OPTIONS") {
     return new NextResponse(null, {
       status: 204,
       headers: {
@@ -14,6 +19,33 @@ export function middleware(req: NextRequest) {
       },
     });
   }
+
+  if (metoda !== "GET" && metoda !== "HEAD") {
+    return NextResponse.json(
+      { greska: "Dopušteni su samo GET i OPTIONS." },
+      {
+        status: 405,
+        headers: { Allow: "GET, HEAD, OPTIONS" },
+      }
+    );
+  }
+
+  const { mapa, max, prozorMs } = limitZaPutanju(req.nextUrl.pathname);
+  const ip = klijentIp(req);
+  if (!dopusteno(mapa, ip, max, prozorMs)) {
+    return NextResponse.json(
+      { greska: PORUKA_LIMIT },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": "60",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
+
   return NextResponse.next();
 }
 

@@ -83,6 +83,13 @@ export const TIP_NAZIV: Record<string, string> = {
   wifi: "Besplatna WiFi točka",
   vatrogasci: "Vatrogasna postrojba / DVD",
   policija: "Policijska postaja",
+  javni_wc: "Javni WC",
+  pojilica: "Pojilica s pitkom vodom",
+  pjesacka_zona: "Pješačka zona",
+  signalizator: "Raskrižje sa zvučnim signalizatorom",
+  zeleni_otok: "Zeleni otok",
+  odgojno: "Odgojno-obrazovni objekt",
+  gtfs_ruta: "ZET linija (statični raspored)",
   isge_objekt: "Gradski objekt u ISGE-u (energija)",
 };
 
@@ -148,6 +155,13 @@ const SKUP_BOJA: Record<string, string> = {
   wifi: "#7c3aed",
   vatrogasci: "#dc2626",
   policija: "#1e40af",
+  javni_wc: "#7c3aed",
+  pojilice: "#0ea5e9",
+  pjesacke_zone: "#a16207",
+  signalizatori: "#db2777",
+  zeleni_otoci: "#4d7c0f",
+  odgojno: "#1e3a8a",
+  gtfs_rute: "#0369a1",
   isge: "#f59e0b",
 };
 

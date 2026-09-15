@@ -26,12 +26,13 @@ export default function VodicPage() {
       <h2 id="karta">Karta</h2>
       <p>
         Gore lijevo potražite školu, ljekarnu, ulicu ili četvrt. Pogodak približi kartu i otvori kratki opis.
-        Ispod je četvrt (ako želite samo jedan dio grada) i legenda po temama. Temu otvorite kad vam treba;
-        podaci se učitaju tek kad uključite sloj.
+        Ispod je četvrt (ako želite samo jedan dio grada), podloga (OpenStreetMap ili ortofoto Geoportala iz
+        2022.) i legenda po temama. Temu otvorite kad vam treba; podaci se učitaju tek kad uključite sloj.
       </p>
       <p>
         Na manjem približenju točke se skupljaju u brojčane krugove. Klik na krug približava. Klik na točku,
-        crtu ili površinu otvara desni panel: naziv, adresa, izvor i kad je Atlas to preuzeo.
+        crtu ili površinu otvara desni panel: naziv, adresa, izvor, objekti u blizini i, za zatvaranja cesta,
+        presjek s biciklističkim stazama i pješačkim zonama.
       </p>
       <p>
         Adresa u pregledniku pamti četvrt i slojeve, pa je možete poslati. Primjer:{" "}
@@ -59,9 +60,9 @@ export default function VodicPage() {
       <h2 id="isge">Energija gradskih objekata (ISGE)</h2>
       <p>
         Grad objavljuje mjesečnu potrošnju i trošak po objektu iz Informacijskog sustava za gospodarenje
-        energijom. Atlas zbraja mjerna mjesta u objekt, energent i mjesec. Storno (negativne količine)
-        ulazi u zbroj. Trošak je s PDV-om. Voda nema kilovatsati, pa je u kubnim metrima i izvan energetskog
-        zbroja.
+        energijom. Atlas zbraja mjerna mjesta u objekt, energent i mjesec. Korekcijski i storno redovi
+        (negativne količine) isključeni su iz zbroja; njihov broj stoji u katalogu. Trošak je s PDV-om. Voda
+        nema kilovatsati, pa je u kubnim metrima i izvan energetskog zbroja.
       </p>
       <p>
         ISGE objekti nemaju koordinate. Atlas ih veže na registar ustanova u tri koraka; svaki spoj nosi
@@ -83,6 +84,11 @@ export default function VodicPage() {
       <p>
         Nespojeni objekti nisu na karti, ali jesu u tablici. Četvrt im se, kad se da, iščita iz naziva ili
         mjesta (npr. Sesvete). Zbroj po četvrtima zato je manji od gradskog. Krivi spoj javite nam.
+      </p>
+      <p>
+        Na dosjeu objekta stoji čitanje „kriza 2022.” (kWh naspram eura 2021./2022.), zima naspram ljeta u
+        punim godinama, i medijan iste namjene u četvrti ili u gradu. Nema kWh/m² jer u javnom CSV-u nema
+        površine zgrade.
       </p>
 
       <h2 id="azurnost">Oznake ažurnosti</h2>
@@ -121,17 +127,27 @@ export default function VodicPage() {
         <li>Točke do 500 m izvan granice grada pripisuju se najbližoj četvrti; dalje ostaju bez četvrti.</li>
         <li>Linije i poligoni su u prikazu pojednostavljeni (oko 2 m). Izvorna geometrija je u datoteci izvora.</li>
         <li>
-          Isplate, proračun i plan komunalnih aktivnosti nisu ovdje. Za to je gradski servis iTransparentnost.
+          Isplate, proračun i plan komunalnih aktivnosti nisu ovdje. Za to je gradski servis{" "}
+          <a href="https://transparentnost.zagreb.hr/" target="_blank" rel="noreferrer">
+            iTransparentnost
+          </a>
+          .
         </li>
-        <li>Nema dolazaka tramvaja u stvarnom vremenu. Stajališta su položaji, ne vozni red.</li>
+        <li>Nema dolazaka tramvaja u stvarnom vremenu. Statične GTFS rute jesu; dolazak uživo nije obveza.</li>
+        <li>
+          Na mobitelu karta ispunjava zaslon; slojevi i pregled objekta otvaraju se kao list s dna. Navigacija
+          se listom pomiče vodoravno.
+        </li>
       </ul>
 
       <h2 id="preuzimanja">Preuzimanja i programsko sučelje</h2>
       <p>
         Sve što Atlas pokazuje može se i preuzeti, bez ključa: GeoJSON i CSV po sloju, tablice, dosje četvrti,
-        potrošnja jednog objekta i strojno čitljiv katalog na <a href="/api/katalog">/api/katalog</a>. Popis
-        putanja je u <a href="/katalog#api">katalogu</a>. Koordinate su WGS84. CSV koristi točku-zarez i
-        UTF-8 s BOM-om, pa se otvara u Excelu i u programu LibreOffice.
+        potrošnja jednog objekta, pročišćeni gold agregati (<code>gold_objekti</code>,{" "}
+        <code>gold_isge_godina</code>, <code>gold_inventar_cetvrt</code>) i strojno čitljiv katalog na{" "}
+        <a href="/api/katalog">/api/katalog</a>. Popis putanja je u <a href="/katalog#api">katalogu</a>.
+        Koordinate su WGS84. CSV koristi točku-zarez i UTF-8 s BOM-om, pa se otvara u Excelu i u programu
+        LibreOffice.
       </p>
       <p>
         Podaci: <a href="https://data.zagreb.hr" target="_blank" rel="noreferrer">data.zagreb.hr</a>, Grad

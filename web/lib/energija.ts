@@ -266,8 +266,170 @@ export const ENERGENT_BOJA: Record<string, string> = {
   Para: "#be123c",
 };
 
-/** Voda se mjeri u m³ i nema kWh — u energetskim zbrojevima je izdvajamo. */
 export const VODA = "Voda";
+
+export type KrizaGodina = { godina: number; kwh: number; eur: number; objekata?: number };
+export type SezonaRed = {
+  sezona: "zima" | "ljeto";
+  mjeseci: number;
+  kwh: number;
+  eur: number;
+  kwh_po_mjesecu: number;
+};
+export type Kohorta = {
+  razina: "cetvrt" | "grad";
+  n: number;
+  namjena: string | null;
+  godina: number;
+  medijan_kwh: number | null;
+  medijan_eur: number | null;
+  objekt_kwh: number | null;
+  objekt_eur: number | null;
+};
+
+export async function energijaAnalitika(id: number): Promise<{
+  krizaObjekt: KrizaGodina[];
+  krizaKohorta: KrizaGodina[];
+  sezona: SezonaRed[];
+  kohorta: Kohorta | null;
+} | null> {
+  const { rows: meta } = await pool().query<{ geo_skup: string | null; cetvrt_id: number | null }>(
+    `SELECT geo_skup, cetvrt_id FROM energy.objekt WHERE id = $1`,
+    [id]
+  );
+  if (!meta.length) return null;
+  const { geo_skup, cetvrt_id } = meta[0];
+
+  const { rows: krizaObjekt } = await pool().query<KrizaGodina>(
+    `SELECT godina,
+            coalesce(sum(kwh) FILTER (WHERE energent <> $2), 0)::float8 AS kwh,
+            coalesce(sum(eur), 0)::float8 AS eur
+     FROM energy.potrosnja WHERE objekt_id = $1 AND godina BETWEEN 2019 AND 2023
+     GROUP BY godina ORDER BY godina`,
+    [id, VODA]
+  );
+
+  const { rows: pune } = await pool().query<{ godina: number }>(
+    `SELECT godina FROM energy.potrosnja WHERE objekt_id = $1 GROUP BY godina HAVING count(DISTINCT mjesec) = 12`,
+    [id]
+  );
+  const puneGod = pune.map((p) => p.godina);
+
+  let sezona: SezonaRed[] = [];
+  if (puneGod.length) {
+    const { rows } = await pool().query<SezonaRed>(
+      `SELECT CASE WHEN mjesec IN (10,11,12,1,2,3) THEN 'zima' ELSE 'ljeto' END AS sezona,
+              count(*)::int AS mjeseci,
+              coalesce(sum(kwh), 0)::float8 AS kwh,
+              coalesce(sum(eur), 0)::float8 AS eur,
+              coalesce(avg(kwh), 0)::float8 AS kwh_po_mjesecu
+       FROM (
+         SELECT godina, mjesec,
+                coalesce(sum(kwh) FILTER (WHERE energent <> $2), 0)::float8 AS kwh,
+                coalesce(sum(eur), 0)::float8 AS eur
+         FROM energy.potrosnja
+         WHERE objekt_id = $1 AND godina = ANY($3)
+         GROUP BY godina, mjesec
+       ) m
+       GROUP BY 1`,
+      [id, VODA, puneGod]
+    );
+    sezona = rows;
+  }
+
+  let krizaKohorta: KrizaGodina[] = [];
+  if (geo_skup) {
+    const { rows } = await pool().query<KrizaGodina>(
+      `WITH po_obj AS (
+         SELECT e.id, p.godina,
+                coalesce(sum(p.kwh) FILTER (WHERE p.energent <> $2), 0)::float8 AS kwh,
+                coalesce(sum(p.eur), 0)::float8 AS eur
+         FROM energy.objekt e
+         JOIN energy.potrosnja p ON p.objekt_id = e.id
+         WHERE e.geo_skup = $1 AND e.id <> $3 AND p.godina BETWEEN 2019 AND 2023
+         GROUP BY e.id, p.godina
+       )
+       SELECT godina,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY kwh)::float8 AS kwh,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY eur)::float8 AS eur,
+              count(*)::int AS objekata
+       FROM po_obj GROUP BY godina ORDER BY godina`,
+      [geo_skup, VODA, id]
+    );
+    krizaKohorta = rows;
+  }
+
+  const zadnjaPuna = puneGod.length ? Math.max(...puneGod) : null;
+  let kohorta: Kohorta | null = null;
+  if (zadnjaPuna) {
+    const { rows: vlastiti } = await pool().query<{ kwh: number; eur: number }>(
+      `SELECT coalesce(sum(kwh) FILTER (WHERE energent <> $2), 0)::float8 AS kwh,
+              coalesce(sum(eur), 0)::float8 AS eur
+       FROM energy.potrosnja WHERE objekt_id = $1 AND godina = $3`,
+      [id, VODA, zadnjaPuna]
+    );
+    const objekt_kwh = vlastiti[0]?.kwh ?? null;
+    const objekt_eur = vlastiti[0]?.eur ?? null;
+
+    async function medijan(gdje: string, args: unknown[]): Promise<{ n: number; kwh: number | null; eur: number | null }> {
+      const { rows } = await pool().query<{ n: number; kwh: number | null; eur: number | null }>(
+        `SELECT count(*)::int AS n,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY kwh)::float8 AS kwh,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY eur)::float8 AS eur
+         FROM (
+           SELECT e.id,
+                  coalesce(sum(p.kwh) FILTER (WHERE p.energent <> $1), 0)::float8 AS kwh,
+                  coalesce(sum(p.eur), 0)::float8 AS eur
+           FROM energy.objekt e
+           JOIN energy.potrosnja p ON p.objekt_id = e.id AND p.godina = $2
+           WHERE e.id <> $3 ${gdje}
+           GROUP BY e.id
+         ) t`,
+        [VODA, zadnjaPuna, id, ...args]
+      );
+      return rows[0] || { n: 0, kwh: null, eur: null };
+    }
+
+    let razina: Kohorta["razina"] = "cetvrt";
+    let m = { n: 0, kwh: null as number | null, eur: null as number | null };
+    if (geo_skup && cetvrt_id) {
+      m = await medijan("AND e.geo_skup = $4 AND e.cetvrt_id = $5", [geo_skup, cetvrt_id]);
+    }
+    if (m.n < 5 && geo_skup) {
+      razina = "grad";
+      m = await medijan("AND e.geo_skup = $4", [geo_skup]);
+    } else if (m.n < 5 && cetvrt_id) {
+      razina = "cetvrt";
+      m = await medijan("AND e.cetvrt_id = $4", [cetvrt_id]);
+    }
+    if (m.n >= 2) {
+      kohorta = {
+        razina,
+        n: m.n,
+        namjena: geo_skup,
+        godina: zadnjaPuna,
+        medijan_kwh: m.kwh,
+        medijan_eur: m.eur,
+        objekt_kwh,
+        objekt_eur,
+      };
+    }
+  }
+
+  return { krizaObjekt, krizaKohorta, sezona, kohorta };
+}
+
+export async function energijaKrizaGrad(): Promise<KrizaGodina[]> {
+  const { rows } = await pool().query<KrizaGodina>(
+    `SELECT godina,
+            coalesce(sum(kwh) FILTER (WHERE energent <> $1), 0)::float8 AS kwh,
+            coalesce(sum(eur), 0)::float8 AS eur
+     FROM energy.potrosnja WHERE godina BETWEEN 2019 AND 2023
+     GROUP BY godina ORDER BY godina`,
+    [VODA]
+  );
+  return rows;
+}
 
 export function bojaEnergenta(e: string): string {
   return ENERGENT_BOJA[e] || "#6b7280";

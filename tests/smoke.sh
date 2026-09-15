@@ -37,6 +37,12 @@ provjeri "/api/sloj/ljekarne?format=csv"
 provjeri "/api/tablica/predsjednici_gc?format=csv"
 provjeri /api/sloj/cetvrti
 provjeri /api/sloj/vrtici
+provjeri /api/sloj/javni_wc
+provjeri /api/sloj/gtfs_rute
+provjeri /api/tablica/asset_lista
+provjeri "/api/tablica/gold_inventar_cetvrt?format=csv"
+provjeri "/api/blizina?lon=15.98&lat=45.81"
+provjeri /api/podloga/ortofoto/13/4540/2845
 
 prvi_slug=$(docker compose exec -T db psql -U atlas -d atlas -Atc \
   "SELECT slug FROM geo.cetvrt ORDER BY naziv LIMIT 1" 2>/dev/null || true)

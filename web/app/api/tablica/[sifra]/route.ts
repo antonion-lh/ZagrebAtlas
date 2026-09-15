@@ -1,4 +1,5 @@
 import { uCsv, ucitajTablicu } from "@/lib/izvoz";
+import { TEK_CSV } from "@/lib/ogranicenja";
 import { greskaPosluzitelja, jsonGreska } from "@/lib/odgovor";
 
 export const dynamic = "force-dynamic";
@@ -6,12 +7,15 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/tablica/[sifra]             → JSON { stupci, redovi }
  * GET /api/tablica/[sifra]?format=csv  → CSV (;)
- * Tablični skupovi bez geometrije: ulice, predsjednici_gc/mo, clanovi_gc/mo, prostori_ms, isge, isge_potrosnja.
+ * Velike tablice (isge_potrosnja, gold_*) samo kao CSV.
  */
 export async function GET(req: Request, ctx: { params: Promise<{ sifra: string }> }) {
   const { sifra } = await ctx.params;
   if (!/^[a-z0-9_]+$/.test(sifra) || sifra.length > 64) return jsonGreska(400, "Neispravna šifra");
   const format = new URL(req.url).searchParams.get("format");
+  if (TEK_CSV.has(sifra) && format !== "csv") {
+    return jsonGreska(400, "Ova tablica je dostupna samo kao CSV (?format=csv).");
+  }
   try {
     const t = await ucitajTablicu(sifra);
     if (!t) return jsonGreska(404, "Nepoznata tablica");

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 // Sigurnosna zaglavlja. CSP dopušta MapLibre (WebGL, blob workeri) i OSM pločice.
+// HSTS djeluje samo kad odgovor stigne preko HTTPS (edge); lokalni HTTP ga ignora.
 const CSP = [
   "default-src 'self'",
   // MapLibre GL JS kompajlira shadere (eval) i WASM; Next.js u devu isto koristi eval.
@@ -15,6 +16,7 @@ const CSP = [
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  "upgrade-insecure-requests",
 ].join("; ");
 
 const nextConfig: NextConfig = {
@@ -31,6 +33,10 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
           {
             key: "Permissions-Policy",
             value:

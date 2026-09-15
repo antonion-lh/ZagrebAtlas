@@ -75,6 +75,8 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
     dijelovi: pregled.poEnergentu.filter((x) => x.godina === y.godina).map((x) => ({ energent: x.energent, v: x.kwh })),
   }));
   const energentiZadnje = pregled.poEnergentu.filter((x) => x.godina === g);
+  const g21 = pregled.poGodini.find((x) => x.godina === 2021);
+  const g22 = pregled.poGodini.find((x) => x.godina === 2022);
   const maxCetvrt = Math.max(1, ...pregled.poCetvrti.map((c) => c.kwh));
 
   return (
@@ -100,6 +102,20 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
           pod={`${pregled.ukupno.spojeno} spojeno na registar · ${pregled.ukupno.sCetvrti} s četvrti`}
         />
       </div>
+
+      {g21 && g22 ? (
+        <p style={{ fontSize: "0.92rem", lineHeight: 1.5, margin: "1rem 0 0" }}>
+          <strong>Kriza 2022. (cijeli ISGE):</strong> energija {fmtKwh(g21.kwh)} → {fmtKwh(g22.kwh)}
+          {g21.kwh
+            ? ` (${g22.kwh >= g21.kwh ? "+" : ""}${(((g22.kwh - g21.kwh) / g21.kwh) * 100).toLocaleString("hr-HR", { maximumFractionDigits: 0 })} %)`
+            : ""}
+          ; račun {fmtEur(g21.eur)} → {fmtEur(g22.eur)}
+          {g21.eur
+            ? ` (${g22.eur >= g21.eur ? "+" : ""}${(((g22.eur - g21.eur) / g21.eur) * 100).toLocaleString("hr-HR", { maximumFractionDigits: 0 })} %)`
+            : ""}
+          . {g22.kwh < g21.kwh && g22.eur > g21.eur ? "Potrošnja je pala, račun porastao." : ""}
+        </p>
+      ) : null}
 
       <section style={{ marginTop: "1.5rem" }}>
         <h2 style={{ fontSize: "1.1rem", marginBottom: "0.2rem" }}>Po godinama i energentima</h2>

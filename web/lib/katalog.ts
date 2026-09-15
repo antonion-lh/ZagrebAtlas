@@ -43,6 +43,8 @@ const TABLICE_S_IZVOZOM = new Set([
   "clanovi_mo",
   "prostori_ms",
   "isge",
+  "asset_lista",
+  "zrak_2023",
 ]);
 
 export function distribucijeZa(sifra: string, geometrija: KatalogSkup["geometrija"]): KatalogSkup["distribucije"] {
@@ -53,10 +55,13 @@ export function distribucijeZa(sifra: string, geometrija: KatalogSkup["geometrij
   }
   if (TABLICE_S_IZVOZOM.has(sifra)) {
     d.push({ format: "CSV", url: `/api/tablica/${sifra}?format=csv`, opis: "tablica" });
-    d.push({ format: "JSON", url: `/api/tablica/${sifra}`, opis: "stupci + redovi" });
+    if (sifra !== "isge") {
+      d.push({ format: "JSON", url: `/api/tablica/${sifra}`, opis: "stupci + redovi" });
+    }
   }
   if (sifra === "isge") {
-    d.push({ format: "CSV", url: `/api/tablica/isge_potrosnja?format=csv`, opis: "mjesečna potrošnja, svi objekti" });
+    d.push({ format: "JSON", url: `/api/tablica/isge`, opis: "popis objekata" });
+    d.push({ format: "CSV", url: `/api/tablica/isge_potrosnja?format=csv`, opis: "mjesečna potrošnja, svi objekti (samo CSV)" });
   }
   return d;
 }
@@ -106,5 +111,90 @@ export const API_TOCKE: { url: string; opis: string; format: string }[] = [
   { url: "/api/tablica/{sifra}", opis: "Tablični skupovi; ?format=csv za CSV", format: "JSON / CSV" },
   { url: "/api/izvoz/cetvrt/{slug}", opis: "Dosje četvrti: ?format=csv ili ?format=geojson", format: "CSV / GeoJSON" },
   { url: "/api/izvoz/energija/{id}", opis: "Mjesečna potrošnja jednog ISGE objekta", format: "CSV" },
-  ...TABLICE_DODATNE.map((t) => ({ url: `/api/tablica/${t.sifra}?format=csv`, opis: t.opis, format: "CSV" })),
+  { url: "/api/blizina?lon=&lat=", opis: "Točke u krugu (JSON)", format: "JSON" },
+  { url: "/api/presjek?id=", opis: "Presjek zatvaranja s biciklističkim stazama i pješačkim zonama", format: "JSON" },
+  ...TABLICE_DODATNE.map((t) => ({
+    url: `/api/tablica/${t.sifra}?format=csv`,
+    opis: t.opis,
+    format: "CSV",
+  })),
+];
+
+export type PortalRed = {
+  naziv: string;
+  opis: string | null;
+  ucestalost: string | null;
+  poveznica: string | null;
+  uvjeti: string | null;
+  paket_id: string | null;
+  atlas_sifra: string | null;
+  stanje: "u_atlasu" | "nije_u_atlasu" | "nije_ckan";
+};
+
+export type IsgeSpoj = {
+  objekata: number;
+  spojeno: number;
+  visoka: number;
+  srednja: number;
+  niska: number;
+  napomena: string | null;
+};
+
+export async function ucitajPortalUsporedba(): Promise<PortalRed[]> {
+  const { rows } = await pool().query<PortalRed>(
+    `SELECT naziv, opis, ucestalost, poveznica, uvjeti, paket_id, atlas_sifra, stanje
+     FROM meta.portal_skup
+     ORDER BY CASE stanje WHEN 'nije_u_atlasu' THEN 0 WHEN 'u_atlasu' THEN 1 ELSE 2 END, naziv`
+  );
+  return rows;
+}
+
+export async function ucitajIsgeSpoj(): Promise<IsgeSpoj | null> {
+  try {
+    const [{ rows }, { rows: nap }] = await Promise.all([
+      pool().query<{ objekata: number; spojeno: number; visoka: number; srednja: number; niska: number }>(
+        `SELECT count(*)::int AS objekata,
+                count(geo_objekt_id)::int AS spojeno,
+                count(*) FILTER (WHERE pouzdanost = 'visoka')::int AS visoka,
+                count(*) FILTER (WHERE pouzdanost = 'srednja')::int AS srednja,
+                count(*) FILTER (WHERE pouzdanost = 'niska')::int AS niska
+         FROM energy.objekt`
+      ),
+      pool().query<{ napomena: string | null }>(
+        `SELECT napomena FROM meta.skup WHERE sifra = 'isge'`
+      ),
+    ]);
+    if (!rows[0]?.objekata) return null;
+    return { ...rows[0], napomena: nap[0]?.napomena ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** Tier B/C i namjerno izvan opsega — javni backlog kataloga E. */
+export const BACKLOG: { naziv: string; razlog: string }[] = [
+  {
+    naziv: "Zborna mjesta civilne zaštite",
+    razlog: "Tier B u v1.3; nije obveza prve inačice ako nestane sati.",
+  },
+  {
+    naziv: "Evakuacijske površine",
+    razlog: "Tier B.",
+  },
+  {
+    naziv: "Brownfield lokacije",
+    razlog: "Tier B.",
+  },
+  {
+    naziv: "GTFS u stvarnom vremenu",
+    razlog: "Namjerno izvan opsega. U Atlasu je statični raspored (rute).",
+  },
+  {
+    naziv: "iTransparentnost (proračun, isplate, OIB)",
+    razlog: "Zaseban servis; Atlas ga ne ingestira. Poveznica ispod na transparentnost.zagreb.hr.",
+  },
+  {
+    naziv: "kWh/m², booking MO, chatbot, Nextbike, ZG3D",
+    razlog: "Namjerno izvan opsega ugovora v1.3.",
+  },
 ];

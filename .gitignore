@@ -1,0 +1,11 @@
+data/**
+!data/.gitkeep
+web/node_modules/
+web/.next/
+web/tsconfig.tsbuildinfo
+**/__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+caddy_data/

@@ -1,0 +1,396 @@
+:root {
+  --bg: #f3efe6;
+  --ink: #1a1f18;
+  --muted: #5c6558;
+  --accent: #2f5d3a;
+  --panel: rgba(255, 252, 245, 0.94);
+  --line: #d5d0c4;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font);
+}
+
+a {
+  color: var(--accent);
+  /* WCAG 2.2 target size: inline poveznice u tablicama i popisima dobivaju 24 px visoku metu */
+  padding-block: 0.2rem;
+}
+h1 a,
+h2 a,
+h3 a,
+.karta-panel a,
+.karta-inspector a {
+  padding-block: 0;
+}
+
+main {
+  min-height: calc(100vh - 3.2rem);
+}
+main:focus {
+  outline: none;
+}
+
+/* Pristupačnost: vidljiv fokus svugdje, skip link, dovoljno velike mete */
+:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.preskoci {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.5rem 0.9rem;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 0 0 6px 6px;
+  text-decoration: none;
+}
+.preskoci:focus {
+  top: 0;
+}
+.zaglavlje {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.brend {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 0.3rem 0;
+}
+.glavna-nav {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+}
+.glavna-nav a {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  min-height: 24px;
+  border-radius: 4px;
+  text-decoration: none;
+}
+.glavna-nav a:hover {
+  text-decoration: underline;
+}
+.glavna-nav a[aria-current="page"] {
+  background: var(--accent);
+  color: #fff;
+}
+.podnozje {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.karta-okvir + .podnozje,
+body:has(.karta-okvir) .podnozje {
+  display: none;
+}
+button,
+select,
+input,
+summary {
+  min-height: 24px;
+}
+/* Filter obrasci: polja se slažu u red, na uskim zaslonima u stupac */
+.filter-forma {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  align-items: end;
+}
+.filter-forma > label:first-child {
+  grid-column: 1 / -1;
+}
+@media (min-width: 900px) {
+  .filter-forma {
+    grid-template-columns: 2fr repeat(auto-fit, minmax(9rem, 1fr));
+  }
+  .filter-forma > label:first-child {
+    grid-column: auto;
+  }
+}
+.filter-forma input,
+.filter-forma select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Široke tablice: na uskim zaslonima svaki red postaje kartica (bez vodoravnog rezanja) */
+.tablica {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tablica th,
+.tablica td {
+  padding: 0.45rem 0.5rem;
+  vertical-align: top;
+  text-align: left;
+}
+.tablica thead tr {
+  border-bottom: 2px solid var(--line);
+}
+.tablica tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+.tablica .broj {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tablica .kontakt div {
+  line-height: 1.9;
+}
+@media (max-width: 720px) {
+  .tablica thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .tablica tbody tr {
+    display: block;
+    padding: 0.5rem 0;
+  }
+  .tablica td {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+  .tablica td::before {
+    content: attr(data-oznaka);
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .tablica td:empty {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Oznaka ažurnosti — proizvodna značajka, ista svugdje */
+.azurnost {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.azurnost-danas { background: #dcfce7; color: #14532d; border-color: #86efac; }
+.azurnost-tjedan { background: #e0f2fe; color: #0c4a6e; border-color: #7dd3fc; }
+.azurnost-mjesec { background: #fef9c3; color: #713f12; border-color: #fde047; }
+.azurnost-godina { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+.azurnost-starija_snimka { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+
+/* Pouzdanost spoja ISGE → registar */
+.pouzdanost-visoka { background: #dcfce7; color: #14532d; border-color: #86efac; }
+.pouzdanost-srednja { background: #fef3c7; color: #78350f; border-color: #fcd34d; }
+.pouzdanost-niska { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+
+/* Karta */
+.karta-okvir {
+  position: relative;
+  height: calc(100vh - 3.2rem);
+}
+.karta-platno {
+  width: 100%;
+  height: 100%;
+}
+.karta-panel {
+  position: absolute;
+  z-index: 2;
+  top: 0.85rem;
+  left: 0.85rem;
+  width: min(21rem, calc(100% - 1.7rem));
+  max-height: calc(100% - 1.7rem);
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.karta-panel h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+.karta-panel h2 {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.karta-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.karta-panel li {
+  margin: 0.25rem 0;
+}
+.karta-panel label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  cursor: pointer;
+  line-height: 1.35;
+  min-height: 24px;
+  padding: 0.1rem 0;
+}
+.karta-panel label input {
+  margin-top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+.karta-panel select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.karta-tocka {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: -0.05rem;
+}
+.karta-tocka.kvadrat {
+  border-radius: 2px;
+}
+.karta-tocka.crta {
+  height: 0.25rem;
+  width: 0.9rem;
+  border-radius: 2px;
+}
+.karta-inspector {
+  position: absolute;
+  z-index: 3;
+  top: 0.85rem;
+  right: 0.85rem;
+  width: min(23rem, calc(100% - 1.7rem));
+  max-height: calc(100% - 1.7rem);
+  overflow: auto;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.karta-inspector h2 {
+  margin: 0 1.6rem 0.2rem 0;
+  font-size: 1.05rem;
+}
+.karta-inspector dl {
+  margin: 0.6rem 0 0;
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.2rem 0.6rem;
+}
+.karta-inspector dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.karta-inspector dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.karta-inspector .izvor {
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.karta-zatvori {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+.karta-gumb {
+  position: absolute;
+  z-index: 2;
+  top: 0.85rem;
+  left: 0.85rem;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.karta-muted {
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .karta-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: 55%;
+    border-radius: 10px 10px 0 0;
+  }
+  .karta-inspector {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    width: 100%;
+    max-height: 60%;
+    border-radius: 10px 10px 0 0;
+  }
+}

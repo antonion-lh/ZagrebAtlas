@@ -1,0 +1,21 @@
+{$DOMENA:zg-atlas.lakehouse.hr} {
+	encode zstd gzip
+
+	# Statika Next-a je immutable
+	@static path /_next/static/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy web:3000 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -45,6 +45,15 @@ else
   greska=1
 fi
 
+prvi_isge=$(docker compose exec -T db psql -U atlas -d atlas -Atc \
+  "SELECT id FROM energy.objekt ORDER BY id LIMIT 1" 2>/dev/null || true)
+if [[ -n "$prvi_isge" ]]; then
+  provjeri "/api/izvoz/energija/$prvi_isge"
+else
+  echo "FAIL nema ISGE objekata u bazi"
+  greska=1
+fi
+
 echo "== baza =="
 docker compose exec -T db psql -U atlas -d atlas -c \
   "SELECT sifra, azurnost, broj_zapisa, zadnja_sinkronizacija::timestamp(0) AS sink

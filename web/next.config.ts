@@ -7,8 +7,9 @@ const CSP = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
-  "font-src 'self' data:",
-  "connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
+  // MapLibre glyph PBF-ovi za brojeve na klasterima
+  "font-src 'self' data: https://demotiles.maplibre.org",
+  "connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://demotiles.maplibre.org",
   "worker-src 'self' blob:",
   "child-src blob:",
   "frame-ancestors 'none'",

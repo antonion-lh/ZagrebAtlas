@@ -1,13 +1,9 @@
 import { notFound } from "next/navigation";
 import { pool } from "@/lib/db";
+import { uCsv } from "@/lib/izvoz";
 import type { Feature, Geometry } from "geojson";
 
 export const dynamic = "force-dynamic";
-
-function csvEsc(v: string) {
-  if (/[",\n]/.test(v)) return `"${v.replaceAll('"', '""')}"`;
-  return v;
-}
 
 export async function GET(
   req: Request,
@@ -84,46 +80,39 @@ export async function GET(
     );
   }
 
-  const zaglavlje = [
-    "skup",
-    "skup_naziv",
-    "azurnost",
-    "tip",
-    "naziv",
-    "adresa",
-    "cetvrt",
-    "mjesni_odbor",
-    "telefon",
-    "email",
-    "web",
-    "lon",
-    "lat",
-  ];
-  const linije = [
-    zaglavlje.join(","),
-    ...rows.map((r) =>
-      [
-        r.skup,
-        r.skup_naziv,
-        r.azurnost,
-        r.tip,
-        r.naziv || "",
-        r.adresa || "",
-        cetvrt.naziv,
-        r.mo || "",
-        r.telefon || "",
-        r.email || "",
-        r.web || "",
-        r.lon?.toFixed(6) ?? "",
-        r.lat?.toFixed(6) ?? "",
-      ]
-        .map((x) => csvEsc(String(x)))
-        .join(",")
-    ),
-  ];
-
-  const body = "\uFEFF" + linije.join("\n") + "\n";
-  return new Response(body, {
+  const csv = uCsv(
+    [
+      "skup",
+      "skup_naziv",
+      "azurnost",
+      "tip",
+      "naziv",
+      "adresa",
+      "cetvrt",
+      "mjesni_odbor",
+      "telefon",
+      "email",
+      "web",
+      "lon",
+      "lat",
+    ],
+    rows.map((r) => [
+      r.skup,
+      r.skup_naziv,
+      r.azurnost,
+      r.tip,
+      r.naziv,
+      r.adresa,
+      cetvrt.naziv,
+      r.mo,
+      r.telefon,
+      r.email,
+      r.web,
+      r.lon?.toFixed(6) ?? "",
+      r.lat?.toFixed(6) ?? "",
+    ])
+  );
+  return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="atlas-${slug}.csv"`,

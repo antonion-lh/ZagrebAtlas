@@ -52,7 +52,7 @@ export default async function UstanovePage({
   const [slojevi, cetvrti] = await Promise.all([ucitajMetaSlojeva(), ucitajCetvrtiKratko()]);
   // Katalog ustanova = točkasti skupovi bez prometnica i uprave-poligona
   const skupoviUstanova = slojevi.filter(
-    (s) => s.vrsta === "tocka" && s.tema !== "zivo" && s.tema !== "prostor"
+    (s) => s.vrsta === "tocka" && s.tema !== "zivo" && s.tema !== "prostor" && s.tema !== "energija"
   );
   const dozvoljeni = new Set(skupoviUstanova.map((s) => s.sifra));
 
@@ -65,10 +65,13 @@ export default async function UstanovePage({
         : [...dozvoljeni],
   ];
   if (q) {
-    args.push(`%${q}%`);
-    uvjeti.push(
-      `(o.naziv ILIKE $${args.length} OR o.adresa ILIKE $${args.length} OR o.attrs->>'vrsta' ILIKE $${args.length})`
-    );
+    const tokeni = q.split(/\s+/).filter((t) => t.length >= 2);
+    for (const t of tokeni.length ? tokeni : [q]) {
+      args.push(`%${t}%`);
+      uvjeti.push(
+        `(o.naziv ILIKE $${args.length} OR o.adresa ILIKE $${args.length} OR o.attrs->>'vrsta' ILIKE $${args.length})`
+      );
+    }
   }
   if (cetvrtSlug) {
     args.push(cetvrtSlug);
@@ -149,6 +152,7 @@ export default async function UstanovePage({
             ))}
           </select>
         </label>
+        {skup ? <input type="hidden" name="skup" value={skup} /> : null}
         <button type="submit" style={{ padding: "0.5rem 0.9rem", font: "inherit", border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", borderRadius: 4, cursor: "pointer" }}>
           Traži
         </button>

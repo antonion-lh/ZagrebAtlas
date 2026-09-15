@@ -171,6 +171,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
   const [odabir, setOdabir] = useState<Odabir | null>(null);
   const [panelOtvoren, setPanelOtvoren] = useState(true);
   const [bezWebGL, setBezWebGL] = useState(false);
+  const [urlSpreman, setUrlSpreman] = useState(false);
 
   // URL parametri: ?cetvrt=<id|slug>&sloj=a,b,c (dosje → karta)
   useEffect(() => {
@@ -185,7 +186,23 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
       const zeljeni = s.split(",").filter((x) => slojevi.some((m) => m.sifra === x));
       if (zeljeni.length) setUkljuceno(new Set(["cetvrti", ...zeljeni]));
     }
+    setUrlSpreman(true);
   }, [cetvrti, slojevi]);
+
+  useEffect(() => {
+    if (!urlSpreman) return;
+    const q = new URLSearchParams();
+    const c = cetvrti.find((x) => x.id === cetvrtId);
+    if (c) q.set("cetvrt", c.slug);
+    const aktivni = [...ukljuceno].filter((s) => s !== "cetvrti").sort();
+    const zadano = ZADANO_UKLJUCENO.filter((s) => s !== "cetvrti" && slojevi.some((m) => m.sifra === s)).sort();
+    if (aktivni.join(",") !== zadano.join(",")) q.set("sloj", aktivni.join(","));
+    const qs = q.toString();
+    const cilj = qs ? `/?${qs}` : "/";
+    if (`${window.location.pathname}${window.location.search}` !== cilj) {
+      window.history.replaceState(null, "", cilj);
+    }
+  }, [urlSpreman, cetvrtId, ukljuceno, cetvrti, slojevi]);
 
   const slojPoSifri = useMemo(() => new Map(slojevi.map((m) => [m.sifra, m])), [slojevi]);
   const cetvrtIdRef = useRef<number | null>(null);

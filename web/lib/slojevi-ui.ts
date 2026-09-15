@@ -178,7 +178,9 @@ export type CetvrtKratko = {
 
 /** Kraći naziv za legendu i dosje ("Geoportal Osnovne škole" → "Osnovne škole"). */
 export function kratkiNaziv(naziv: string): string {
-  return naziv.replace(/^Geoportal\s+/i, "").replace(/\s+—\s+kontakt$/i, "");
+  const s = naziv.replace(/^Geoportal\s+/i, "").replace(/\s+—\s+kontakt$/i, "").trim();
+  if (!s) return naziv;
+  return s.charAt(0).toLocaleUpperCase("hr") + s.slice(1);
 }
 
 export function formatDatum(iso: string | null | undefined): string {

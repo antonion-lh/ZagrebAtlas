@@ -146,8 +146,11 @@ export async function energijaObjekti(
   const uvjeti: string[] = [];
   const args: unknown[] = [godina];
   if (f.q) {
-    args.push(`%${f.q}%`);
-    uvjeti.push(`(e.naziv ILIKE $${args.length} OR e.adresa ILIKE $${args.length})`);
+    const tokeni = f.q.split(/\s+/).filter((t) => t.length >= 2);
+    for (const t of tokeni.length ? tokeni : [f.q]) {
+      args.push(`%${t}%`);
+      uvjeti.push(`(e.naziv ILIKE $${args.length} OR e.adresa ILIKE $${args.length})`);
+    }
   }
   if (f.cetvrt) {
     args.push(f.cetvrt);

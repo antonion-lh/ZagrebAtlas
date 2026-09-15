@@ -1,10 +1,11 @@
+import type { Metadata } from "next";
 import { AtlasKarta } from "@/components/AtlasKarta";
 import { ucitajCetvrtiKratko, ucitajMetaSlojeva, type CetvrtKratko, type SlojMeta } from "@/lib/slojevi";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Karta grada",
+export const metadata: Metadata = {
+  title: { absolute: "Karta grada — Zagreb Gradski atlas" },
   description: "Interaktivna karta otvorenih podataka Grada Zagreba po temama, s oznakom ažurnosti svakog sloja.",
 };
 

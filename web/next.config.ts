@@ -7,11 +7,11 @@ const CSP = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
-  // MapLibre glyph PBF-ovi za brojeve na klasterima
   "font-src 'self' data: https://demotiles.maplibre.org",
   "connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://demotiles.maplibre.org",
   "worker-src 'self' blob:",
   "child-src blob:",
+  "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -29,15 +29,22 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Permissions-Policy", value: "geolocation=(), camera=(), microphone=()" },
+          { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          {
+            key: "Permissions-Policy",
+            value:
+              "accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), interest-cohort=()",
+          },
         ],
       },
       {
-        // Otvoreni API: dopušteno s bilo koje domene
         source: "/api/:path*",
         headers: [
           { key: "Access-Control-Allow-Origin", value: "*" },
           { key: "Access-Control-Allow-Methods", value: "GET, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Accept, Content-Type" },
+          { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
         ],
       },
     ];

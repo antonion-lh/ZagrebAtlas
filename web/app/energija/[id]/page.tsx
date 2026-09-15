@@ -51,9 +51,9 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
   const geoMeta = o.geo_skup ? slojevi.find((s) => s.sifra === o.geo_skup) : null;
 
   return (
-    <div style={{ maxWidth: "60rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <p style={{ fontSize: "0.88rem", margin: "0 0 0.5rem" }}>
-        <Link href="/energija">← Energija gradskih objekata</Link>
+    <div className="stranica stranica-siroka">
+      <p className="mrvice">
+        <Link href="/energija">Energija gradskih objekata</Link>
       </p>
       <h1 style={{ marginTop: 0, marginBottom: "0.3rem" }}>{o.naziv}</h1>
       <p style={{ color: "var(--muted)", marginTop: 0, lineHeight: 1.5 }}>
@@ -86,7 +86,7 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
         ) : (
           <>
             Nije spojen na registar ustanova (adresa/naziv se ne poklapaju ni s jednim učitanim skupom), pa
-            nije na karti.{o.metoda ? ` Četvrt utvrđena iz: ${o.metoda}.` : ""}
+            nije na karti.{o.metoda ? ` Četvrt je utvrđena iz: ${o.metoda}.` : ""}
           </>
         )}
       </div>
@@ -186,7 +186,7 @@ export default async function EnergijaObjektPage({ params }: { params: Promise<{
       </section>
 
       <p style={{ marginTop: "1.5rem", fontSize: "0.88rem" }}>
-        <a href={`/api/izvoz/energija/${o.id}`}>Preuzmi CSV (svi mjeseci)</a> ·{" "}
+        <a href={`/api/izvoz/energija/${o.id}`}>Preuzmi CSV svih mjeseci</a> ·{" "}
         <a href="https://data.zagreb.hr/dataset/podaci-o-potrosnji-i-trosku-za-objekte-grada-zagreba" target="_blank" rel="noreferrer">
           izvor na data.zagreb.hr
         </a>

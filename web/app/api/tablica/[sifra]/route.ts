@@ -1,4 +1,5 @@
 import { uCsv, ucitajTablicu } from "@/lib/izvoz";
+import { greskaPosluzitelja, jsonGreska } from "@/lib/odgovor";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +10,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request, ctx: { params: Promise<{ sifra: string }> }) {
   const { sifra } = await ctx.params;
-  if (!/^[a-z0-9_]+$/.test(sifra)) return Response.json({ greska: "Neispravna šifra" }, { status: 400 });
+  if (!/^[a-z0-9_]+$/.test(sifra) || sifra.length > 64) return jsonGreska(400, "Neispravna šifra");
   const format = new URL(req.url).searchParams.get("format");
   try {
     const t = await ucitajTablicu(sifra);
-    if (!t) return Response.json({ greska: "Nepoznata tablica" }, { status: 404 });
+    if (!t) return jsonGreska(404, "Nepoznata tablica");
     if (format === "csv") {
       return new Response(uCsv(t.stupci, t.redovi), {
         headers: {
@@ -28,6 +29,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ sifra: string }
       { headers: { "Cache-Control": "public, max-age=3600" } }
     );
   } catch (e) {
-    return Response.json({ greska: e instanceof Error ? e.message : "Greška baze" }, { status: 500 });
+    return greskaPosluzitelja(e);
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 204 });
 }

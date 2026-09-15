@@ -4,106 +4,106 @@ import { AZURNOST, AZURNOST_OPIS, TEME } from "@/lib/slojevi-ui";
 export const metadata: Metadata = {
   title: "Vodič",
   description:
-    "Kako čitati Zagreb Gradski atlas: što je na karti, što je u dosjeu četvrti, što znače oznake ažurnosti, kako se spajaju ISGE podaci, gdje su preuzimanja i kako prijaviti grešku.",
+    "Kako čitati Zagreb Gradski atlas: karta, dosje četvrti, ustanove, energija, oznake starosti podataka i preuzimanja.",
 };
-
-const h2 = { fontSize: "1.2rem", margin: "2rem 0 0.5rem" } as const;
-const p = { lineHeight: 1.6, margin: "0.5rem 0" } as const;
 
 export default function VodicPage() {
   return (
-    <div style={{ maxWidth: "46rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <h1 style={{ marginTop: 0 }}>Vodič kroz Atlas</h1>
-      <p style={{ ...p, color: "var(--muted)" }}>
-        Zagreb Gradski atlas je karta i skup dosjea nad otvorenim podacima Grada Zagreba. Nije ocjena kvarta ni
-        rang-lista; popisuje što grad objavljuje, gdje se to nalazi i koliko je podatak star.
+    <div className="stranica">
+      <h1>Vodič kroz Atlas</h1>
+      <p className="uvod">
+        Zagreb Gradski atlas skuplja ono što Grad već objavljuje na data.zagreb.hr i Geoportalu: gdje je što,
+        u kojoj četvrti, i koliko je podatak star. Nije ocjena kvarta.
       </p>
 
-      <nav aria-label="Sadržaj vodiča" style={{ fontSize: "0.92rem", lineHeight: 1.7 }}>
+      <nav aria-label="Sadržaj vodiča" className="sadrzaj-vodica">
         <a href="#karta">Karta</a> · <a href="#dosje">Dosje četvrti</a> · <a href="#ustanove">Ustanove</a> ·{" "}
-        <a href="#isge">Energija (ISGE)</a> · <a href="#azurnost">Oznake ažurnosti</a> · <a href="#teme">Teme</a> ·{" "}
-        <a href="#ogranicenja">Ograničenja</a> · <a href="#preuzimanja">Preuzimanja i API</a> ·{" "}
+        <a href="#isge">Energija</a> · <a href="#azurnost">Ažurnost</a> · <a href="#teme">Teme</a> ·{" "}
+        <a href="#ogranicenja">Ograničenja</a> · <a href="#preuzimanja">Preuzimanja</a> ·{" "}
         <a href="#pristupacnost">Pristupačnost</a> · <a href="#kontakt">Kontakt</a>
       </nav>
 
-      <h2 id="karta" style={h2}>Karta</h2>
-      <p style={p}>
-        Lijevi panel je legenda: slojevi su grupirani po temama, svaki s brojem zapisa i oznakom ažurnosti.
-        Uključite sloj kvačicom; podaci se učitavaju tek tada. Točke se na manjim zoomovima grupiraju u
-        brojčane krugove — klik na krug približava. Klik na točku, liniju ili poligon otvara desni panel s
-        atributima, izvorom i datumom sinkronizacije.
+      <h2 id="karta">Karta</h2>
+      <p>
+        Gore lijevo potražite školu, ljekarnu, ulicu ili četvrt. Pogodak približi kartu i otvori kratki opis.
+        Ispod je četvrt (ako želite samo jedan dio grada) i legenda po temama. Temu otvorite kad vam treba;
+        podaci se učitaju tek kad uključite sloj.
       </p>
-      <p style={p}>
-        Izbornik „Četvrt” filtrira sve slojeve na jednu četvrt i nudi poveznicu na njezin dosje. Stanje
-        karte može se dijeliti adresom, npr. <code>/?cetvrt=maksimir&amp;sloj=ljekarne,bus_stajalista</code>.
-        Ako preglednik nema WebGL, umjesto karte se prikazuje popis slojeva s poveznicama na dosjee.
+      <p>
+        Na manjem približenju točke se skupljaju u brojčane krugove. Klik na krug približava. Klik na točku,
+        crtu ili površinu otvara desni panel: naziv, adresa, izvor i kad je Atlas to preuzeo.
       </p>
-
-      <h2 id="dosje" style={h2}>Dosje četvrti</h2>
-      <p style={p}>
-        Za svaku od 17 četvrti: predsjednik i sjedište četvrti, vijeće, prostori mjesne samouprave, područni
-        ured, popis mjesnih odbora (s predsjednikom, sjedištem i vijećem), inventar ustanova i usluga po
-        temama (svaka grupa ima „na karti”), sekcija energije gradskih objekata i popis izvora s ažurnošću.
-        Cijeli dosje se preuzima kao CSV ili GeoJSON na dnu stranice.
+      <p>
+        Adresa u pregledniku pamti četvrt i slojeve, pa je možete poslati. Primjer:{" "}
+        <code>/?cetvrt=maksimir&amp;sloj=ljekarne,bus_stajalista</code>. Ako preglednik ne crta kartu, isti
+        sadržaj je u dosjeima i u katalogu.
       </p>
-
-      <h2 id="ustanove" style={h2}>Katalog ustanova</h2>
-      <p style={p}>
-        Pretraživ popis svih točkastih objekata (ustanove, usluge, komunalna oprema, stajališta) po nazivu,
-        adresi i vrsti, s filtrom po temi, skupu i četvrti. Svaki red nosi izvor i oznaku ažurnosti; kontakt
-        podaci su onakvi kakvi su u izvoru.
+      <p>
+        Kad je karta u fokusu (kliknite je ili dođite tipkom Tab), strelice pomiču prikaz, a plus i minus
+        približuju i udaljuju.
       </p>
 
-      <h2 id="isge" style={h2}>Energija gradskih objekata (ISGE)</h2>
-      <p style={p}>
-        Grad objavljuje mjesečnu potrošnju i trošak energenata po objektu i mjernom mjestu iz Informacijskog
-        sustava za gospodarenje energijom (ISGE). Atlas zbraja mjerna mjesta u objekt × energent × mjesec;
-        storno retci (negativne količine) zbrajaju se s izvornima. Trošak je s PDV-om. Voda nema kWh, pa se
-        prikazuje u m³ i izdvaja iz energetskih zbrojeva.
+      <h2 id="dosje">Dosje četvrti</h2>
+      <p>
+        Svaka od 17 četvrti ima stranicu: predsjednik i sjedište, vijeće, prostori mjesne samouprave, područni
+        ured, mjesni odbori, pa ustanove i usluge po temama. Uz svaku skupinu je poveznica na kartu. Na dnu
+        su izvori i preuzimanje u CSV-u ili GeoJSON-u. Ispis iz preglednika otvara i skupljene odlomke.
       </p>
-      <p style={p}>
-        ISGE objekti nemaju koordinate. Atlas ih spaja na registar ustanova (škole, vrtići, domovi zdravlja,
-        sportski i kulturni objekti, sjedišta mjesne samouprave…) u tri koraka i svaki spoj označava
-        pouzdanošću:
+
+      <h2 id="ustanove">Ustanove i usluge</h2>
+      <p>
+        Popis točaka: škole, vrtići, zdravstvo, sport, stajališta, ljekarne. Traži se po nazivu, adresi i
+        vrsti; može se suziti na temu, skup ili četvrt. Kontakt je onakav kakav stoji u izvoru.
       </p>
-      <ul style={{ lineHeight: 1.6 }}>
+
+      <h2 id="isge">Energija gradskih objekata (ISGE)</h2>
+      <p>
+        Grad objavljuje mjesečnu potrošnju i trošak po objektu iz Informacijskog sustava za gospodarenje
+        energijom. Atlas zbraja mjerna mjesta u objekt, energent i mjesec. Storno (negativne količine)
+        ulazi u zbroj. Trošak je s PDV-om. Voda nema kilovatsati, pa je u kubnim metrima i izvan energetskog
+        zbroja.
+      </p>
+      <p>
+        ISGE objekti nemaju koordinate. Atlas ih veže na registar ustanova u tri koraka; svaki spoj nosi
+        pouzdanost:
+      </p>
+      <ul>
         <li>
           <span className="azurnost pouzdanost-visoka">visoka</span> — ista ulica i kućni broj, sličan naziv;
         </li>
         <li>
-          <span className="azurnost pouzdanost-srednja">srednja</span> — ista ulica i kućni broj uz različit naziv,
-          ili ista ulica uz sličan naziv;
+          <span className="azurnost pouzdanost-srednja">srednja</span> — ista adresa uz različit naziv, ili
+          ista ulica uz sličan naziv;
         </li>
         <li>
-          <span className="azurnost pouzdanost-niska">niska</span> — samo vrlo sličan naziv (ne za sjedišta MO/GČ).
+          <span className="azurnost pouzdanost-niska">niska</span> — samo vrlo sličan naziv (ne za sjedišta
+          mjesnih odbora i četvrti).
         </li>
       </ul>
-      <p style={p}>
-        Nespojeni objekti nisu na karti, ali su u tablici i pregledu; četvrt im se, kad je moguće, izvlači iz
-        naziva („Gradska četvrt X – MS Y”) ili mjesta (Sesvete). Zbroj po četvrtima je zato manji od
-        gradskog. Kad primijetite krivi spoj, javite nam (dolje).
+      <p>
+        Nespojeni objekti nisu na karti, ali jesu u tablici. Četvrt im se, kad se da, iščita iz naziva ili
+        mjesta (npr. Sesvete). Zbroj po četvrtima zato je manji od gradskog. Krivi spoj javite nam.
       </p>
 
-      <h2 id="azurnost" style={h2}>Oznake ažurnosti</h2>
-      <p style={p}>
-        Svaki sloj, grupa u dosjeu i red u katalogu nosi istu oznaku. Ona govori koliko često se izvor mijenja i
-        koliko je stara snimka, ne koliko je podatak točan.
+      <h2 id="azurnost">Oznake ažurnosti</h2>
+      <p>
+        Ista oznaka stoji na sloju, u dosjeu i u katalogu. Govori koliko često se izvor mijenja i koliko je
+        stara snimka, ne koliko je podatak točan.
       </p>
-      <ul style={{ lineHeight: 1.7 }}>
+      <ul>
         {Object.entries(AZURNOST_OPIS).map(([k, v]) => (
           <li key={k}>
             <span className={`azurnost azurnost-${k}`}>{AZURNOST[k]}</span> — {v}
           </li>
         ))}
       </ul>
-      <p style={p}>
-        U katalogu je za svaki skup i datum zadnje izmjene na data.zagreb.hr te datum kad ga je Atlas
-        zadnji put povukao. Dnevni skupovi (zatvaranja prometnica, prostori mjesne samouprave) osvježavaju se
-        automatski.
+      <p>
+        U katalogu je i datum zadnje izmjene na data.zagreb.hr, i datum kad ga je Atlas zadnji put povukao.
+        Zatvaranja cesta i prostori mjesne samouprave osvježavaju se svaki dan.
       </p>
 
-      <h2 id="teme" style={h2}>Teme</h2>
-      <ul style={{ lineHeight: 1.7 }}>
+      <h2 id="teme">Teme</h2>
+      <ul>
         {TEME.filter((t) => t.sifra !== "meta").map((t) => (
           <li key={t.sifra}>
             <a href={`/katalog#tema-${t.sifra}`}>{t.naziv}</a>
@@ -111,43 +111,47 @@ export default function VodicPage() {
         ))}
       </ul>
 
-      <h2 id="ogranicenja" style={h2}>Što Atlas nije i gdje griješi</h2>
-      <ul style={{ lineHeight: 1.6 }}>
-        <li>Atlas ne stvara podatke. Ako je nešto krivo u izvoru (adresa, kontakt, lokacija), krivo je i ovdje; oznaka ažurnosti i poveznica na izvor služe da to provjerite.</li>
-        <li>Geoportal snimke označene „starija snimka” većinom su iz 2022./2023. i ne prikazuju nužno današnje stanje.</li>
+      <h2 id="ogranicenja">Što Atlas nije</h2>
+      <ul>
+        <li>
+          Atlas ne izmišlja podatke. Ako je adresa u izvoru kriva, kriva je i ovdje. Zato uz svaki sloj stoji
+          poveznica na data.zagreb.hr.
+        </li>
+        <li>Geoportalove snimke označene „starija snimka” većinom su iz 2022. ili 2023.</li>
         <li>Točke do 500 m izvan granice grada pripisuju se najbližoj četvrti; dalje ostaju bez četvrti.</li>
-        <li>Linije i poligoni su u prikazu i izvozu pojednostavljeni (~2 m); izvorna geometrija je u resursu izvora.</li>
-        <li>Isplate, proračun i plan komunalnih aktivnosti nisu dio Atlasa — za to postoji gradski servis iTransparentnost.</li>
-        <li>Nema real-time podataka (npr. dolasci ZET-a); stajališta su statični položaji.</li>
+        <li>Linije i poligoni su u prikazu pojednostavljeni (oko 2 m). Izvorna geometrija je u datoteci izvora.</li>
+        <li>
+          Isplate, proračun i plan komunalnih aktivnosti nisu ovdje. Za to je gradski servis iTransparentnost.
+        </li>
+        <li>Nema dolazaka tramvaja u stvarnom vremenu. Stajališta su položaji, ne vozni red.</li>
       </ul>
 
-      <h2 id="preuzimanja" style={h2}>Preuzimanja i API</h2>
-      <p style={p}>
-        Sve što Atlas prikazuje dostupno je i kao datoteka, bez ključeva: GeoJSON i CSV po sloju, CSV/JSON za
-        tablične skupove, CSV/GeoJSON dosjea četvrti, CSV potrošnje ISGE objekta te strojno čitljiv katalog na{" "}
-        <a href="/api/katalog">/api/katalog</a>. Popis krajnjih točaka je u <a href="/katalog#api">katalogu</a>.
-        Koordinate su WGS84; CSV koristi točku-zarez i UTF-8 s BOM-om (otvara se izravno u Excelu i LibreOfficeu).
+      <h2 id="preuzimanja">Preuzimanja i programsko sučelje</h2>
+      <p>
+        Sve što Atlas pokazuje može se i preuzeti, bez ključa: GeoJSON i CSV po sloju, tablice, dosje četvrti,
+        potrošnja jednog objekta i strojno čitljiv katalog na <a href="/api/katalog">/api/katalog</a>. Popis
+        putanja je u <a href="/katalog#api">katalogu</a>. Koordinate su WGS84. CSV koristi točku-zarez i
+        UTF-8 s BOM-om, pa se otvara u Excelu i u programu LibreOffice.
       </p>
-      <p style={p}>
-        Podaci: <a href="https://data.zagreb.hr" target="_blank" rel="noreferrer">data.zagreb.hr</a>, Grad Zagreb, Otvorena dozvola
-        (OD) — navedite izvor. Kôd Atlasa je otvoren pod MIT licencom.
-      </p>
-
-      <h2 id="pristupacnost" style={h2}>Pristupačnost</h2>
-      <p style={p}>
-        Cilj je WCAG 2.2 razina AA: cijela stranica radi tipkovnicom (poveznica „Preskoči na sadržaj” na
-        početku, vidljiv fokus, trenutna stranica označena u navigaciji), oznake ne ovise samo o boji (svaka
-        ima tekst), tablice imaju zaglavlja, obrasci imaju oznake, sadržaj je na hrvatskom (<code>lang="hr"</code>).
-        Karta zahtijeva WebGL i miš ili dodir; sav sadržaj karte dostupan je i tekstualno kroz dosje četvrti,
-        katalog ustanova i preuzimanja. Ako naiđete na prepreku, javite nam.
+      <p>
+        Podaci: <a href="https://data.zagreb.hr" target="_blank" rel="noreferrer">data.zagreb.hr</a>, Grad
+        Zagreb, Otvorena dozvola — navedite izvor. Kôd Atlasa je pod MIT licencom.
       </p>
 
-      <h2 id="kontakt" style={h2}>Kontakt i prijava grešaka</h2>
-      <p style={p}>
-        Greške u podacima prijavite izvoru (svaki skup u katalogu ima poveznicu na data.zagreb.hr). Greške u
-        Atlasu — krivi spoj, kriva četvrt, prikaz, pristupačnost — prijavite kao{" "}
-        <a href="https://github.com/antonion-lh/ZagrebAtlas/issues">GitHub issue</a> (vidi{" "}
-        <code>CONTRIBUTING.md</code>). Kôd je MIT; podaci ostaju Grada Zagreba (Otvorena dozvola).
+      <h2 id="pristupacnost">Pristupačnost</h2>
+      <p>
+        Cilj je WCAG 2.2, razina AA. Cijela stranica radi tipkovnicom (poveznica „Preskoči na sadržaj”,
+        vidljiv fokus, trenutačna stranica u navigaciji). Oznake imaju tekst, ne samo boju. Tablice imaju
+        zaglavlja, obrasci oznake. Jezik je hrvatski (<code>lang=&quot;hr&quot;</code>). Karta treba WebGL;
+        sav sadržaj karte dostupan je i kao tekst u dosjeu, u popisu ustanova i u preuzimanjima.
+      </p>
+
+      <h2 id="kontakt">Kontakt i prijava grešaka</h2>
+      <p>
+        Grešku u podatku prijavite izvoru (u katalogu je poveznica na data.zagreb.hr). Grešku u Atlasu —
+        krivi spoj, kriva četvrt, prikaz, prepreku u korištenju — otvorite kao{" "}
+        <a href="https://github.com/antonion-lh/ZagrebAtlas/issues">prijavu na GitHubu</a>. Kôd je MIT;
+        podaci ostaju Grada Zagreba.
       </p>
     </div>
   );

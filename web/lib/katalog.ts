@@ -98,9 +98,10 @@ export async function ucitajKatalog(): Promise<KatalogSkup[]> {
     .sort((a, b) => (redTema.get(a.tema) ?? 99) - (redTema.get(b.tema) ?? 99) || a.naziv.localeCompare(b.naziv, "hr"));
 }
 
-/** Atlasovi vlastiti krajnji točke (asset lista izvan skupova). */
+/** Atlasove putanje za preuzimanje (izvan pojedinačnih skupova). */
 export const API_TOCKE: { url: string; opis: string; format: string }[] = [
-  { url: "/api/katalog", opis: "Ovaj katalog, strojno čitljiv (DCAT-nalik JSON)", format: "JSON" },
+  { url: "/api/katalog", opis: "Ovaj katalog, strojno čitljiv (JSON u duhu DCAT-a)", format: "JSON" },
+  { url: "/api/trazi?q=", opis: "Pretraga četvrti, mjesnih odbora i objekata (JSON)", format: "JSON" },
   { url: "/api/sloj/{sifra}", opis: "GeoJSON sloja; ?format=csv za CSV", format: "GeoJSON / CSV" },
   { url: "/api/tablica/{sifra}", opis: "Tablični skupovi; ?format=csv za CSV", format: "JSON / CSV" },
   { url: "/api/izvoz/cetvrt/{slug}", opis: "Dosje četvrti: ?format=csv ili ?format=geojson", format: "CSV / GeoJSON" },

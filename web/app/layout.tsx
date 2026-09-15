@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "Zagreb Gradski atlas",
     template: "%s — Zagreb Gradski atlas",
   },
-  description: "Karta i dosjei nad otvorenim podacima Grada Zagreba, s oznakom ažurnosti.",
+  description: "Karta i dosjei četvrti nad otvorenim podacima Grada Zagreba. Svaki sloj nosi oznaku koliko je podatak star.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -38,16 +38,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </main>
         <footer className="podnozje">
           <span>
-            Podaci: <a href="https://data.zagreb.hr" target="_blank" rel="noreferrer">data.zagreb.hr</a>, Grad Zagreb,
-            Otvorena dozvola (OD). Kôd:{" "}
+            Podaci dolaze s{" "}
+            <a href="https://data.zagreb.hr" target="_blank" rel="noreferrer">
+              data.zagreb.hr
+            </a>
+            , Grad Zagreb, Otvorena dozvola. Kôd je slobodan (
             <a href="https://github.com/antonion-lh/ZagrebAtlas" target="_blank" rel="noreferrer">
               MIT
             </a>
-            .
+            ).
           </span>
           <span>
-            <a href="/vodic">Vodič</a> · <a href="/vodic#pristupacnost">Pristupačnost</a> · <a href="/katalog#api">API</a> ·{" "}
-            <a href="/vodic#kontakt">Kontakt i greške</a>
+            <a href="/vodic">Vodič</a> · <a href="/vodic#pristupacnost">Pristupačnost</a> ·{" "}
+            <a href="/katalog#api">Preuzimanja</a> · <a href="/vodic#kontakt">Greška? Javite</a>
           </span>
         </footer>
       </body>

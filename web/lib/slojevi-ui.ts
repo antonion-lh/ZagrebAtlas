@@ -27,12 +27,12 @@ export const AZURNOST: Record<string, string> = {
 };
 
 export const AZURNOST_OPIS: Record<string, string> = {
-  danas: "Izvor se osvježava dnevno; Atlas preuzima svaki dan.",
-  tjedan: "Izvor se osvježava tjedno.",
-  mjesec: "Izvor se osvježava mjesečno.",
-  godina: "Izvor se mijenja rijetko, otprilike godišnje.",
+  danas: "Grad ovo osvježava svaki dan; Atlas preuzima svaki dan.",
+  tjedan: "Izvor se mijenja otprilike jednom tjedno.",
+  mjesec: "Izvor se mijenja otprilike jednom mjesečno.",
+  godina: "Izvor se mijenja rijetko, otprilike jednom godišnje.",
   starija_snimka:
-    "Snimka Geoportala ili arhivski skup (većinom 2022./2023.). Ne prikazuje nužno današnje stanje.",
+    "Snimka Geoportala ili stariji skup, većinom iz 2022. ili 2023. Možda više ne odgovara ulici.",
 };
 
 export const TIP_NAZIV: Record<string, string> = {
@@ -75,7 +75,7 @@ export const TIP_NAZIV: Record<string, string> = {
   parkiraliste_bicikli: "Parkiralište za bicikle",
   javni_bicikli: "Stanica javnih bicikala",
   ev_punionica: "Električna punionica",
-  taxi_stajaliste: "Taxi stajalište",
+  taxi_stajaliste: "Stajalište taksija",
   bic_staza: "Biciklistička staza",
   trznica: "Gradska tržnica",
   ljekarna: "Ljekarna",

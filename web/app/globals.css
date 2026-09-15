@@ -136,10 +136,11 @@ summary {
     grid-column: auto;
   }
 }
-.filter-forma input,
-.filter-forma select {
-  width: 100%;
-  min-width: 0;
+.filter-forma > label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 /* Široke tablice: na uskim zaslonima svaki red postaje kartica (bez vodoravnog rezanja) */
@@ -254,20 +255,40 @@ summary {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
 }
-.karta-panel h2 {
-  margin: 0.9rem 0 0.35rem;
+.karta-panel h2,
+.karta-tema > summary {
+  margin: 0.55rem 0 0.25rem;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
-}
-.karta-panel ul {
+  cursor: pointer;
   list-style: none;
-  margin: 0;
-  padding: 0;
 }
-.karta-panel li {
-  margin: 0.25rem 0;
+.karta-tema > summary::-webkit-details-marker {
+  display: none;
+}
+.karta-tema > summary::before {
+  content: "▸ ";
+  font-size: 0.75em;
+}
+.karta-tema[open] > summary::before {
+  content: "▾ ";
+}
+.karta-tema {
+  border-top: 1px solid var(--line);
+  padding: 0.15rem 0 0.35rem;
+}
+.karta-uvod {
+  margin: 0 0 0.7rem;
+  line-height: 1.4;
+}
+.karta-poveznica {
+  margin: 0.4rem 0 0;
+  font-size: 0.86rem;
+}
+.karta-pretraga {
+  margin-bottom: 0.65rem;
 }
 .karta-panel label {
   display: flex;
@@ -278,10 +299,94 @@ summary {
   min-height: 24px;
   padding: 0.1rem 0;
 }
-.karta-panel label input {
-  margin-top: 0.25rem;
-  width: 1rem;
-  height: 1rem;
+.karta-panel > label,
+.karta-pretraga > label {
+  display: grid;
+  gap: 0.2rem;
+  cursor: default;
+}
+.karta-panel > label .karta-muted,
+.karta-pretraga .karta-muted {
+  font-size: 0.8rem;
+}
+.karta-panel input[type="search"],
+.karta-panel input[type="text"] {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.karta-pogoci {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  max-height: 12rem;
+  overflow: auto;
+}
+.karta-pogoci li {
+  margin: 0;
+}
+.karta-pogoci button {
+  display: grid;
+  gap: 0.05rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  padding: 0.4rem 0.45rem;
+  border-radius: 3px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.karta-pogoci button:hover,
+.karta-pogoci button:focus-visible {
+  background: var(--bg);
+}
+.karta-alat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0.55rem 0 0.45rem;
+}
+.gumb-tekst {
+  border: 0;
+  background: none;
+  padding: 0.25rem 0;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.karta-tipkovnica {
+  margin: 0.85rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.karta-upozorenje {
+  color: #b91c1c;
+}
+.karta-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.karta-panel li {
+  margin: 0.25rem 0;
+}
+.karta-panel label input[type="checkbox"] {
+  margin-top: 0.15rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
   flex: none;
 }
 .karta-panel select {
@@ -392,5 +497,116 @@ summary {
     width: 100%;
     max-height: 60%;
     border-radius: 10px 10px 0 0;
+  }
+}
+
+/* Stranice izvan karte */
+.stranica {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+.stranica-siroka {
+  max-width: 62rem;
+}
+.uvod {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 1.25rem;
+}
+h1 {
+  margin-top: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.gumb {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.95rem;
+  font: inherit;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.filter-forma input,
+.filter-forma select,
+.polje {
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  width: 100%;
+  min-width: 0;
+}
+.okvir {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+}
+.mrvice {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+}
+.popis-cetvrti {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+}
+.popis-cetvrti li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.popis-cetvrti a {
+  font-weight: 600;
+  text-decoration: none;
+}
+.popis-cetvrti span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.stranica h2,
+.stranica-siroka h2 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.45rem;
+}
+.sadrzaj-vodica {
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+@media print {
+  .zaglavlje,
+  .podnozje,
+  .preskoci,
+  .karta-okvir,
+  .gumb,
+  .ne-printaj {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #111;
+  }
+  .stranica,
+  .stranica-siroka {
+    max-width: none;
+    padding: 0;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  details {
+    break-inside: avoid;
+  }
+  details:not([open]) > *:not(summary) {
+    display: revert !important;
   }
 }

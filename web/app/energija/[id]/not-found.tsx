@@ -2,10 +2,11 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div style={{ maxWidth: "40rem", margin: "0 auto", padding: "2rem 1.25rem" }}>
+    <div className="stranica">
       <h1>Objekt nije pronađen</h1>
+      <p className="uvod">Nema gradskog objekta s tim brojem u ISGE-u.</p>
       <p>
-        Nema ISGE objekta s tim identifikatorom. <Link href="/energija">Natrag na pregled energije</Link>.
+        <Link href="/energija">Natrag na pregled energije</Link>
       </p>
     </div>
   );

@@ -10,12 +10,13 @@ import {
   type EnergijaFilter,
 } from "@/lib/energija";
 import { ucitajCetvrtiKratko } from "@/lib/slojevi";
+import { ocistiUpit } from "@/lib/odgovor";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Energija gradskih objekata",
-  description: "Potrošnja i trošak energije i vode gradskih objekata Zagreba (ISGE) po godinama, energentima, četvrtima i objektima.",
+  description: "Potrošnja i trošak energije i vode u objektima Grada Zagreba, iz ISGE-a, po godinama i četvrtima.",
 };
 
 type Params = { q?: string; cetvrt?: string; energent?: string; spojeni?: string; sort?: string; str?: string };
@@ -28,14 +29,6 @@ function url(p: Params, promjena: Partial<Params>): string {
   const s = q.toString();
   return s ? `/energija?${s}#objekti` : "/energija#objekti";
 }
-
-const ulaz = {
-  padding: "0.45rem 0.6rem",
-  font: "inherit",
-  border: "1px solid var(--line)",
-  borderRadius: 4,
-  background: "#fff",
-} as const;
 
 function Kartica({ label, v, pod }: { label: string; v: string; pod?: string }) {
   return (
@@ -52,15 +45,15 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
   const pregled = await energijaPregled();
   if (!pregled) {
     return (
-      <div style={{ maxWidth: "60rem", margin: "0 auto", padding: "1.5rem 1.25rem" }}>
+      <div className="stranica">
         <h1>Energija gradskih objekata</h1>
-        <p role="alert">ISGE skup još nije učitan. Pokreni <code>sync.py --skupovi isge</code>.</p>
+        <p role="alert">Podaci o energiji još nisu učitani. Pogledajte ostale teme na karti ili u katalogu.</p>
       </div>
     );
   }
   const g = pregled.zadnjaPunaGodina;
   const f: EnergijaFilter = {
-    q: (p.q || "").trim(),
+    q: ocistiUpit(p.q || ""),
     cetvrt: p.cetvrt || "",
     energent: p.energent || "",
     spojeni: p.spojeni === "da" || p.spojeni === "ne" ? p.spojeni : "",
@@ -85,13 +78,12 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
   const maxCetvrt = Math.max(1, ...pregled.poCetvrti.map((c) => c.kwh));
 
   return (
-    <div style={{ maxWidth: "62rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <h1 style={{ marginTop: 0 }}>Energija gradskih objekata</h1>
-      <p style={{ color: "var(--muted)", lineHeight: 1.5 }}>
-        Potrošnja i trošak energije i vode za objekte Grada Zagreba iz ISGE-a (Informacijski sustav za
-        gospodarenje energijom), mjesečno po objektu i energentu, razdoblje {pregled.razdoblje?.od} –{" "}
-        {pregled.razdoblje?.do}. Objekti su spojeni na registar ustanova adresom ili nazivom; nespojeni
-        su vidljivi samo u tablici. Trošak je s PDV-om.
+    <div className="stranica stranica-siroka">
+      <h1>Energija gradskih objekata</h1>
+      <p className="uvod">
+        Koliko struje, plina i vode troše objekti Grada, iz Informacijskog sustava za gospodarenje energijom
+        (ISGE), od {pregled.razdoblje?.od} do {pregled.razdoblje?.do}. Trošak je s PDV-om. Objekti spojeni na
+        registar ustanova vide se i na karti; ostali samo u ovoj tablici.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "0.6rem" }}>
@@ -184,13 +176,13 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
       <section id="objekti" style={{ marginTop: "1.75rem" }}>
         <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Objekti</h2>
         <form method="get" action="/energija#objekti" className="filter-forma">
-          <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+          <label>
             Traži (naziv, adresa)
-            <input name="q" defaultValue={f.q} placeholder="npr. OŠ, Dom zdravlja, Ilica" style={ulaz} />
+            <input name="q" defaultValue={f.q} placeholder="npr. OŠ, Dom zdravlja, Ilica" />
           </label>
-          <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+          <label>
             Četvrt
-            <select name="cetvrt" defaultValue={f.cetvrt} style={ulaz}>
+            <select name="cetvrt" defaultValue={f.cetvrt}>
               <option value="">Sve</option>
               {cetvrti.map((c) => (
                 <option key={c.id} value={c.slug}>
@@ -199,9 +191,9 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
               ))}
             </select>
           </label>
-          <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+          <label>
             Energent
-            <select name="energent" defaultValue={f.energent} style={ulaz}>
+            <select name="energent" defaultValue={f.energent}>
               <option value="">Svi</option>
               {energenti.map((e) => (
                 <option key={e} value={e}>
@@ -210,19 +202,16 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
               ))}
             </select>
           </label>
-          <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+          <label>
             Spojeni na registar
-            <select name="spojeni" defaultValue={f.spojeni} style={ulaz}>
+            <select name="spojeni" defaultValue={f.spojeni}>
               <option value="">Svi</option>
               <option value="da">Samo spojeni</option>
               <option value="ne">Samo nespojeni</option>
             </select>
           </label>
           <input type="hidden" name="sort" value={f.sort} />
-          <button
-            type="submit"
-            style={{ padding: "0.5rem 0.9rem", font: "inherit", border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", borderRadius: 4, cursor: "pointer" }}
-          >
+          <button type="submit" className="gumb">
             Traži
           </button>
         </form>
@@ -240,7 +229,7 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
           {f.q || f.cetvrt || f.energent || f.spojeni ? (
             <>
               {" · "}
-              <Link href="/energija#objekti">poništi filtre</Link>
+              <Link href="/energija#objekti">poništi odabir</Link>
             </>
           ) : null}
         </p>
@@ -302,7 +291,7 @@ export default async function EnergijaPage({ searchParams }: { searchParams: Pro
         <a href="https://data.zagreb.hr/dataset/podaci-o-potrosnji-i-trosku-za-objekte-grada-zagreba" target="_blank" rel="noreferrer">
           Podaci o potrošnji i trošku za objekte Grada Zagreba
         </a>{" "}
-        (data.zagreb.hr, ISGE). Korekcijski redovi (storno) su zbrojeni s izvornima. Spoj na registar:{" "}
+        Korekcijski redovi (storno) zbrojeni su s izvornima. Spoj na registar:{" "}
         <em>visoka</em> = ista adresa i sličan naziv, <em>srednja</em> = ista adresa ili ista ulica sa sličnim
         nazivom, <em>niska</em> = samo sličan naziv.
       </p>

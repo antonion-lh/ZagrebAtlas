@@ -1,4 +1,5 @@
 import { slojUCsv } from "@/lib/izvoz";
+import { greskaPosluzitelja, jsonGreska } from "@/lib/odgovor";
 import { ucitajSloj } from "@/lib/slojevi";
 
 export const dynamic = "force-dynamic";
@@ -16,14 +17,14 @@ const CACHE: Record<string, string> = {
  */
 export async function GET(req: Request, ctx: { params: Promise<{ sifra: string }> }) {
   const { sifra } = await ctx.params;
-  if (!/^[a-z0-9_]+$/.test(sifra)) {
-    return Response.json({ greska: "Neispravna šifra" }, { status: 400 });
+  if (!/^[a-z0-9_]+$/.test(sifra) || sifra.length > 64) {
+    return jsonGreska(400, "Neispravna šifra");
   }
   const format = new URL(req.url).searchParams.get("format");
 
   try {
     const fc = await ucitajSloj(sifra);
-    if (!fc) return Response.json({ greska: "Nepoznat sloj" }, { status: 404 });
+    if (!fc) return jsonGreska(404, "Nepoznat sloj");
     const cache = CACHE[sifra] || "public, max-age=86400";
     if (format === "csv") {
       return new Response(slojUCsv(fc), {
@@ -42,7 +43,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ sifra: string }
       },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Greška baze";
-    return Response.json({ greska: msg }, { status: 500 });
+    return greskaPosluzitelja(e);
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 204 });
 }

@@ -14,6 +14,7 @@ import {
   type CetvrtKratko,
   type SlojMeta,
 } from "@/lib/slojevi-ui";
+import { atributSkriven, nazivAtributa } from "@/lib/hr";
 
 type Props = {
   slojevi: SlojMeta[];
@@ -25,7 +26,20 @@ type Odabir = {
   props: Record<string, unknown>;
 };
 
-const ZADANO_UKLJUCENO = ["cetvrti", "prometnice", "vrtici", "osnovne", "srednje"];
+type Pogodak = {
+  vrsta: "cetvrt" | "mo" | "objekt";
+  id: string;
+  naziv: string;
+  adresa: string | null;
+  skup: string;
+  tip: string | null;
+  cetvrt: string | null;
+  cetvrt_slug: string | null;
+  lon: number;
+  lat: number;
+};
+
+const ZADANO_UKLJUCENO = ["cetvrti", "prometnice"];
 
 const SRC = (s: string) => `s-${s}`;
 
@@ -172,6 +186,11 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
   const [panelOtvoren, setPanelOtvoren] = useState(true);
   const [bezWebGL, setBezWebGL] = useState(false);
   const [urlSpreman, setUrlSpreman] = useState(false);
+  const [trazi, setTrazi] = useState("");
+  const [pogoci, setPogoci] = useState<Pogodak[]>([]);
+  const [traziIde, setTraziIde] = useState(false);
+  const [legendaQ, setLegendaQ] = useState("");
+  const [kopirano, setKopirano] = useState(false);
 
   // URL parametri: ?cetvrt=<id|slug>&sloj=a,b,c (dosje → karta)
   useEffect(() => {
@@ -188,6 +207,34 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
     }
     setUrlSpreman(true);
   }, [cetvrti, slojevi]);
+
+  useEffect(() => {
+    const q = trazi.trim();
+    if (q.length < 2) {
+      setPogoci([]);
+      setTraziIde(false);
+      return;
+    }
+    const c = cetvrti.find((x) => x.id === cetvrtId);
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      setTraziIde(true);
+      const qs = new URLSearchParams({ q });
+      if (c) qs.set("cetvrt", c.slug);
+      fetch(`/api/trazi?${qs}`, { signal: ac.signal })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d: { pogoci?: Pogodak[] }) => setPogoci(d.pogoci || []))
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setPogoci([]);
+        })
+        .finally(() => setTraziIde(false));
+    }, 280);
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [trazi, cetvrtId, cetvrti]);
 
   useEffect(() => {
     if (!urlSpreman) return;
@@ -239,7 +286,15 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
     }
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.on("load", () => setSpremna(true));
+    map.on("load", () => {
+      const platno = map.getCanvas();
+      platno.tabIndex = 0;
+      platno.setAttribute(
+        "aria-label",
+        "Karta otvorenih podataka Zagreba. Kad je u fokusu, strelice pomiču prikaz, plus i minus približuju i udaljuju."
+      );
+      setSpremna(true);
+    });
 
     // klik: prvo točke/linije, pa MO, pa četvrti
     map.on("click", (e) => {
@@ -320,7 +375,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
             return rest;
           });
         } catch (e) {
-          setGreske((g) => ({ ...g, [sifra]: e instanceof Error ? e.message : "greška" }));
+          setGreske((g) => ({ ...g, [sifra]: "nije se učitalo" }));
           return;
         } finally {
           setUcitava((s) => {
@@ -416,26 +471,75 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
       return n;
     });
 
+  const otvoriPogodak = (p: Pogodak) => {
+    const map = mapRef.current;
+    if (map) {
+      map.flyTo({
+        center: [p.lon, p.lat],
+        zoom: p.vrsta === "cetvrt" ? 12.4 : p.vrsta === "mo" ? 14 : 16,
+        duration: 700,
+      });
+    }
+    if (p.vrsta === "cetvrt") {
+      const hit = cetvrti.find((x) => String(x.id) === p.id || x.slug === p.cetvrt_slug);
+      if (hit) setCetvrtId(hit.id);
+    }
+    const meta = slojPoSifri.get(p.skup);
+    if (meta) {
+      toggle(p.skup, true);
+      setOdabir({
+        sloj: meta,
+        props: {
+          id: p.id,
+          naziv: p.naziv,
+          adresa: p.adresa,
+          tip: p.tip,
+          cetvrt: p.cetvrt,
+          cetvrt_slug: p.cetvrt_slug,
+          slug: p.vrsta === "cetvrt" ? p.cetvrt_slug : undefined,
+        },
+      });
+    }
+    setTrazi("");
+    setPogoci([]);
+  };
+
+  const kopirajPoveznicu = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setKopirano(true);
+      window.setTimeout(() => setKopirano(false), 2000);
+    } catch {
+      setKopirano(false);
+    }
+  };
+
+  const qLegenda = legendaQ.trim().toLocaleLowerCase("hr");
   const grupe = TEME.map((t) => ({
     tema: t,
-    slojevi: slojevi.filter((m) => m.tema === t.sifra),
+    slojevi: slojevi.filter((m) => {
+      if (m.tema !== t.sifra) return false;
+      if (!qLegenda) return true;
+      return kratkiNaziv(m.naziv).toLocaleLowerCase("hr").includes(qLegenda);
+    }),
   })).filter((g) => g.slojevi.length);
 
   if (bezWebGL) {
     return (
-      <div style={{ maxWidth: "44rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-        <h1 style={{ marginTop: 0 }}>Karta grada</h1>
-        <p role="alert" style={{ lineHeight: 1.5 }}>
-          Vaš preglednik ne podržava WebGL, pa se karta ne može prikazati. Isti podaci dostupni su
-          bez karte: <a href="/cetvrti">dosjei četvrti</a> i <a href="/katalog">katalog podataka</a>.
+      <div className="stranica">
+        <h1>Karta grada</h1>
+        <p role="alert" className="uvod">
+          Ovaj preglednik ne crta kartu (nema WebGL). Isti podaci su u{" "}
+          <a href="/cetvrti">dosjeima četvrti</a>, u <a href="/ustanove">popisu ustanova</a> i u{" "}
+          <a href="/katalog">katalogu</a>.
         </p>
         {grupe.map(({ tema, slojevi: ss }) => (
           <section key={tema.sifra}>
-            <h2 style={{ fontSize: "1rem", margin: "1.2rem 0 0.3rem" }}>{tema.naziv}</h2>
-            <ul style={{ paddingLeft: "1.1rem", lineHeight: 1.6 }}>
+            <h2>{tema.naziv}</h2>
+            <ul>
               {ss.map((m) => (
                 <li key={m.sifra}>
-                  {m.naziv} · {m.broj}{" "}
+                  {kratkiNaziv(m.naziv)} · {m.broj}{" "}
                   <span className={`azurnost azurnost-${m.azurnost}`}>
                     {AZURNOST[m.azurnost] || m.azurnost}
                   </span>{" "}
@@ -462,14 +566,52 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
             ×
           </button>
           <h1>Karta grada</h1>
-          <p className="karta-muted" style={{ margin: "0 0 0.6rem", lineHeight: 1.4 }}>
-            Otvoreni podaci Grada Zagreba na jednoj karti. Svaki sloj nosi oznaku ažurnosti.
+          <p className="karta-muted karta-uvod">
+            Grad objavljuje otvorene podatke. Ovdje su na jednom mjestu. Uključite sloj kad vam treba.
           </p>
 
-          <label style={{ display: "block", cursor: "default" }}>
-            <span className="karta-muted" style={{ fontSize: "0.8rem" }}>
-              Četvrt
-            </span>
+          <div className="karta-pretraga">
+            <label>
+              <span className="karta-muted">Traži u Zagrebu</span>
+              <input
+                type="search"
+                value={trazi}
+                onChange={(e) => setTrazi(e.target.value)}
+                placeholder="škola, ljekarna, Ilica…"
+                autoComplete="off"
+                enterKeyHint="search"
+              />
+            </label>
+            {trazi.trim().length >= 2 ? (
+              <ul className="karta-pogoci" role="listbox" aria-label="Pogoci pretrage">
+                {traziIde && !pogoci.length ? (
+                  <li className="karta-muted">Tražim…</li>
+                ) : !pogoci.length ? (
+                  <li className="karta-muted">Nema pogotka. Probajte drugi naziv ili adresu.</li>
+                ) : (
+                  pogoci.map((p) => (
+                    <li key={`${p.vrsta}-${p.id}`}>
+                      <button type="button" onClick={() => otvoriPogodak(p)}>
+                        <strong>{p.naziv}</strong>
+                        <span className="karta-muted">
+                          {[
+                            p.vrsta === "cetvrt" ? "gradska četvrt" : p.vrsta === "mo" ? "mjesni odbor" : null,
+                            p.adresa,
+                            p.cetvrt && p.vrsta !== "cetvrt" ? p.cetvrt : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            ) : null}
+          </div>
+
+          <label>
+            <span className="karta-muted">Četvrt</span>
             <select
               value={cetvrtId ?? ""}
               onChange={(e) => setCetvrtId(e.target.value ? Number(e.target.value) : null)}
@@ -483,48 +625,79 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
             </select>
           </label>
           {cetvrtId !== null ? (
-            <p style={{ margin: "0.4rem 0 0", fontSize: "0.86rem" }}>
-              <a href={`/cetvrti/${cetvrti.find((c) => c.id === cetvrtId)?.slug}`}>
-                Otvori dosje četvrti →
-              </a>
+            <p className="karta-poveznica">
+              <a href={`/cetvrti/${cetvrti.find((c) => c.id === cetvrtId)?.slug}`}>Dosje ove četvrti</a>
             </p>
           ) : null}
 
-          {grupe.map(({ tema, slojevi: ss }) => (
-            <section key={tema.sifra}>
-              <h2>{tema.naziv}</h2>
-              <ul>
-                {ss.map((m) => (
-                  <li key={m.sifra}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={ukljuceno.has(m.sifra)}
-                        onChange={(e) => toggle(m.sifra, e.target.checked)}
-                      />
-                      <span>
-                        <span
-                          className={`karta-tocka ${m.vrsta === "poligon" ? "kvadrat" : m.vrsta === "linija" ? "crta" : ""}`}
-                          style={{ background: m.boja }}
+          <div className="karta-alat">
+            <button
+              type="button"
+              className="gumb-tekst"
+              onClick={() => setUkljuceno(new Set(["cetvrti", "prometnice"]))}
+            >
+              Samo granice i zatvaranja
+            </button>
+            <button type="button" className="gumb-tekst" onClick={kopirajPoveznicu}>
+              {kopirano ? "Poveznica je u međuspremniku" : "Kopiraj poveznicu"}
+            </button>
+          </div>
+
+          <label>
+            <span className="karta-muted">U legendi</span>
+            <input
+              type="search"
+              value={legendaQ}
+              onChange={(e) => setLegendaQ(e.target.value)}
+              placeholder="npr. vrtić, ZET, zrak"
+              autoComplete="off"
+            />
+          </label>
+
+          {grupe.map(({ tema, slojevi: ss }) => {
+            const imaUkljucen = ss.some((m) => ukljuceno.has(m.sifra));
+            const otvori = imaUkljucen || Boolean(qLegenda) || tema.sifra === "zivo" || tema.sifra === "prostor";
+            return (
+              <details key={tema.sifra} className="karta-tema" open={otvori ? true : undefined}>
+                <summary>
+                  {tema.naziv}{" "}
+                  <span className="karta-muted">
+                    ({ss.filter((m) => ukljuceno.has(m.sifra)).length}/{ss.length})
+                  </span>
+                </summary>
+                <ul>
+                  {ss.map((m) => (
+                    <li key={m.sifra}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={ukljuceno.has(m.sifra)}
+                          onChange={(e) => toggle(m.sifra, e.target.checked)}
                         />
-                        {kratkiNaziv(m.naziv)}{" "}
-                        <span className="karta-muted">· {m.broj}</span>{" "}
-                        <span className={`azurnost azurnost-${m.azurnost}`}>
-                          {AZURNOST[m.azurnost] || m.azurnost}
+                        <span>
+                          <span
+                            className={`karta-tocka ${m.vrsta === "poligon" ? "kvadrat" : m.vrsta === "linija" ? "crta" : ""}`}
+                            style={{ background: m.boja }}
+                          />
+                          {kratkiNaziv(m.naziv)}{" "}
+                          <span className="karta-muted">· {m.broj}</span>{" "}
+                          <span className={`azurnost azurnost-${m.azurnost}`}>
+                            {AZURNOST[m.azurnost] || m.azurnost}
+                          </span>
+                          {ucitava.has(m.sifra) ? <span className="karta-muted"> … učitavam</span> : null}
+                          {greske[m.sifra] ? <span className="karta-upozorenje"> · {greske[m.sifra]}</span> : null}
                         </span>
-                        {ucitava.has(m.sifra) ? (
-                          <span className="karta-muted"> … učitavam</span>
-                        ) : null}
-                        {greske[m.sifra] ? (
-                          <span style={{ color: "#b91c1c" }}> · {greske[m.sifra]}</span>
-                        ) : null}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            );
+          })}
+          <p className="karta-muted karta-tipkovnica">
+            Kliknite kartu pa strelice, plus i minus. Popis bez karte:{" "}
+            <a href="/ustanove">ustanove</a>, <a href="/cetvrti">četvrti</a>.
+          </p>
         </aside>
       ) : (
         <button type="button" className="karta-gumb" onClick={() => setPanelOtvoren(true)}>
@@ -534,12 +707,7 @@ export function AtlasKarta({ slojevi, cetvrti }: Props) {
 
       {odabir ? <Inspector odabir={odabir} onClose={() => setOdabir(null)} /> : null}
 
-      <div
-        ref={ref}
-        className="karta-platno"
-        role="application"
-        aria-label="Karta otvorenih podataka Zagreba"
-      />
+      <div ref={ref} className="karta-platno" />
     </div>
   );
 }
@@ -576,7 +744,7 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
     }
   }
   const dodatno = Object.entries(props).filter(
-    ([k, v]) => !SKRIVENO.has(k) && v !== null && v !== "" && v !== undefined
+    ([k, v]) => !SKRIVENO.has(k) && !atributSkriven(k) && v !== null && v !== "" && v !== undefined
   );
 
   const web = typeof props.web === "string" && props.web ? props.web : null;
@@ -594,14 +762,14 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         {sloj.sifra === "mo" ? " · mjesni odbor" : ""}
       </div>
 
-      {sloj.sifra === "cetvrti" && typeof props.slug === "string" ? (
-        <p style={{ margin: "0.6rem 0 0" }}>
-          <a href={`/cetvrti/${props.slug}`}>Otvori dosje četvrti →</a>
+        {sloj.sifra === "cetvrti" && typeof props.slug === "string" ? (
+        <p className="karta-poveznica">
+          <a href={`/cetvrti/${props.slug}`}>Dosje ove četvrti</a>
         </p>
       ) : null}
       {sloj.sifra === "isge" && props.energy_id ? (
-        <p style={{ margin: "0.6rem 0 0" }}>
-          <a href={`/energija/${String(props.energy_id)}`}>Otvori energetski dosje →</a>
+        <p className="karta-poveznica">
+          <a href={`/energija/${String(props.energy_id)}`}>Potrošnja energije ovog objekta</a>
         </p>
       ) : null}
 
@@ -628,7 +796,7 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         ) : null}
         {webHref ? (
           <>
-            <dt>Web</dt>
+            <dt>Stranica</dt>
             <dd>
               <a href={webHref} target="_blank" rel="noreferrer">
                 {web}
@@ -668,9 +836,11 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
           .map(([k, v]) => (
             <Red key={k} k={k} v={v} />
           ))}
-        {Object.entries(ostalo).map(([k, v]) => (
-          <Red key={`o-${k}`} k={k} v={v} />
-        ))}
+        {Object.entries(ostalo)
+          .filter(([k, v]) => !atributSkriven(k) && v !== null && v !== "" && v !== undefined)
+          .map(([k, v]) => (
+            <Red key={`o-${k}`} k={k} v={v} />
+          ))}
       </dl>
 
       <div className="izvor">
@@ -682,12 +852,12 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
         </div>
         <div style={{ marginTop: "0.25rem" }}>{AZURNOST_OPIS[sloj.azurnost]}</div>
         <div style={{ marginTop: "0.25rem" }}>
-          Sinkronizirano: {formatDatum(sloj.sink)}
+          Preuzeto u Atlas: {formatDatum(sloj.sink)}
           {sloj.ckan_url ? (
             <>
               {" · "}
               <a href={sloj.ckan_url} target="_blank" rel="noreferrer">
-                paket na data.zagreb.hr
+                izvor na data.zagreb.hr
               </a>
             </>
           ) : null}
@@ -698,11 +868,10 @@ function Inspector({ odabir, onClose }: { odabir: Odabir; onClose: () => void })
 }
 
 function Red({ k, v }: { k: string; v: unknown }) {
-  const label = k.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
   const txt = typeof v === "object" ? JSON.stringify(v) : String(v);
   return (
     <>
-      <dt>{label}</dt>
+      <dt>{nazivAtributa(k)}</dt>
       <dd>{txt}</dd>
     </>
   );

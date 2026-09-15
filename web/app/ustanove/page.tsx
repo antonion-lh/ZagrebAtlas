@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { pool } from "@/lib/db";
+import { JAVNA_GRESKA, ocistiUpit } from "@/lib/odgovor";
 import { ucitajCetvrtiKratko, ucitajMetaSlojeva } from "@/lib/slojevi";
 import { AZURNOST, TEME, TIP_NAZIV, kratkiNaziv } from "@/lib/slojevi-ui";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Katalog ustanova i usluga",
-  description: "Pretraživ popis ustanova, usluga, komunalne opreme i stajališta iz otvorenih podataka Grada Zagreba.",
+  title: "Ustanove i usluge",
+  description: "Škole, vrtići, zdravstvo, sport, stajališta i ostale točke iz otvorenih podataka Grada Zagreba.",
 };
 
 const PO_STRANICI = 100;
@@ -43,11 +44,11 @@ export default async function UstanovePage({
   searchParams: Promise<Params>;
 }) {
   const p = await searchParams;
-  const q = (p.q || "").trim();
-  const tema = p.tema || "";
-  const skup = p.skup || "";
-  const cetvrtSlug = p.cetvrt || "";
-  const str = Math.max(1, Number(p.str) || 1);
+  const q = ocistiUpit(p.q || "");
+  const tema = ocistiUpit(p.tema || "", 40);
+  const skup = ocistiUpit(p.skup || "", 64).replace(/[^a-z0-9_]/g, "");
+  const cetvrtSlug = ocistiUpit(p.cetvrt || "", 80);
+  const str = Math.min(200, Math.max(1, Number(p.str) || 1));
 
   const [slojevi, cetvrti] = await Promise.all([ucitajMetaSlojeva(), ucitajCetvrtiKratko()]);
   // Katalog ustanova = točkasti skupovi bez prometnica i uprave-poligona
@@ -65,8 +66,10 @@ export default async function UstanovePage({
         : [...dozvoljeni],
   ];
   if (q) {
-    const tokeni = q.split(/\s+/).filter((t) => t.length >= 2);
-    for (const t of tokeni.length ? tokeni : [q]) {
+    const tokeni = q.split(/\s+/).filter((t) => t.length >= 2).slice(0, 6);
+    for (const sirovi of tokeni.length ? tokeni : [q]) {
+      const t = sirovi.replace(/[%_\\]/g, "");
+      if (t.length < 2) continue;
       args.push(`%${t}%`);
       uvjeti.push(
         `(o.naziv ILIKE $${args.length} OR o.adresa ILIKE $${args.length} OR o.attrs->>'vrsta' ILIKE $${args.length})`
@@ -104,8 +107,8 @@ export default async function UstanovePage({
     ]);
     redovi = rows;
     ukupno = br[0]?.n ?? 0;
-  } catch (e) {
-    greska = e instanceof Error ? e.message : "Greška baze";
+  } catch {
+    greska = JAVNA_GRESKA;
   }
 
   const stranica = Math.ceil(ukupno / PO_STRANICI);
@@ -113,26 +116,21 @@ export default async function UstanovePage({
   const temeSUstanovama = TEME.filter((t) => skupoviUstanova.some((s) => s.tema === t.sifra));
 
   return (
-    <div style={{ maxWidth: "60rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <h1 style={{ marginTop: 0 }}>Katalog ustanova i usluga</h1>
-      <p style={{ color: "var(--muted)", lineHeight: 1.5 }}>
-        Pretraživ popis svih točkastih objekata iz učitanih otvorenih skupova — ustanove, usluge,
-        komunalna oprema, stajališta. Svaki red nosi izvor i oznaku ažurnosti.
+    <div className="stranica stranica-siroka">
+      <h1>Ustanove i usluge</h1>
+      <p className="uvod">
+        Škole, vrtići, ljekarne, stajališta, sportski i zdravstveni objekti. Tražite po nazivu ili adresi;
+        uz svaki red stoji izvor i koliko je podatak star.
       </p>
 
       <form method="get" action="/ustanove" className="filter-forma">
-        <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+        <label>
           Traži (naziv, adresa, vrsta)
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="npr. Dubrava, ljekarna, Kvaternikov"
-            style={{ padding: "0.45rem 0.6rem", font: "inherit", border: "1px solid var(--line)", borderRadius: 4 }}
-          />
+          <input name="q" defaultValue={q} placeholder="npr. Dubrava, ljekarna, Kvaternikov" />
         </label>
-        <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+        <label>
           Tema
-          <select name="tema" defaultValue={tema} style={{ padding: "0.45rem 0.5rem", font: "inherit", border: "1px solid var(--line)", borderRadius: 4, background: "#fff" }}>
+          <select name="tema" defaultValue={tema}>
             <option value="">Sve teme</option>
             {temeSUstanovama.map((t) => (
               <option key={t.sifra} value={t.sifra}>
@@ -141,9 +139,9 @@ export default async function UstanovePage({
             ))}
           </select>
         </label>
-        <label style={{ display: "grid", gap: "0.2rem", fontSize: "0.85rem", color: "var(--muted)" }}>
+        <label>
           Četvrt
-          <select name="cetvrt" defaultValue={cetvrtSlug} style={{ padding: "0.45rem 0.5rem", font: "inherit", border: "1px solid var(--line)", borderRadius: 4, background: "#fff" }}>
+          <select name="cetvrt" defaultValue={cetvrtSlug}>
             <option value="">Cijeli grad</option>
             {cetvrti.map((c) => (
               <option key={c.id} value={c.slug}>
@@ -153,7 +151,7 @@ export default async function UstanovePage({
           </select>
         </label>
         {skup ? <input type="hidden" name="skup" value={skup} /> : null}
-        <button type="submit" style={{ padding: "0.5rem 0.9rem", font: "inherit", border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", borderRadius: 4, cursor: "pointer" }}>
+        <button type="submit" className="gumb">
           Traži
         </button>
       </form>
@@ -193,7 +191,7 @@ export default async function UstanovePage({
             {(q || tema || skup || cetvrtSlug) && (
               <>
                 {" · "}
-                <Link href="/ustanove">poništi filtre</Link>
+                <Link href="/ustanove">poništi odabir</Link>
               </>
             )}
           </>
@@ -216,7 +214,12 @@ export default async function UstanovePage({
             </tr>
           </thead>
           <tbody>
-            {redovi.map((r) => {
+            {redovi.length === 0 && !greska ? (
+              <tr>
+                <td colSpan={6}>Nema rezultata za ovaj upit. Promijenite pojam ili četvrt.</td>
+              </tr>
+            ) : (
+              redovi.map((r) => {
               const m = metaPoSifri.get(r.skup);
               return (
                 <tr key={r.id}>
@@ -242,7 +245,7 @@ export default async function UstanovePage({
                     {r.web ? (
                       <div>
                         <a href={r.web.startsWith("http") ? r.web : `https://${r.web}`} target="_blank" rel="noreferrer">
-                          web
+                          stranica
                         </a>
                       </div>
                     ) : null}
@@ -259,7 +262,8 @@ export default async function UstanovePage({
                   </td>
                 </tr>
               );
-            })}
+            })
+            )}
           </tbody>
         </table>
       </div>

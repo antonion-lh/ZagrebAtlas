@@ -15,8 +15,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     .catch(() => ({ rows: [] as { naziv: string }[] }));
   const naziv = rows[0]?.naziv;
   return {
-    title: naziv ? `${naziv} — dosje četvrti` : "Četvrt nije pronađena",
-    description: naziv ? `Dosje gradske četvrti ${naziv}: mjesni odbori, ustanove, lokalna demokracija, energija.` : undefined,
+    title: naziv ? `${naziv}` : "Četvrt nije pronađena",
+    description: naziv
+      ? `Gradska četvrt ${naziv}: mjesni odbori, ustanove, vijeće i energija iz otvorenih podataka.`
+      : undefined,
   };
 }
 
@@ -92,17 +94,17 @@ export default async function CetvrtDosjePage({
   const vijeceAktivno = uprava.vijece.filter((v) => v.aktivan);
 
   return (
-    <div style={{ maxWidth: "48rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <p style={{ margin: "0 0 0.75rem", fontSize: "0.92rem" }}>
-        <Link href="/cetvrti">← Sve četvrti</Link>
+    <div className="stranica">
+      <p className="mrvice">
+        <Link href="/cetvrti">Sve četvrti</Link>
         {" · "}
-        <Link href="/">Karta</Link>
+        <Link href={`/?cetvrt=${cetvrt.slug}`}>Na karti</Link>
       </p>
 
-      <h1 style={{ margin: "0 0 0.4rem" }}>{cetvrt.naziv}</h1>
-      <p style={{ color: "var(--muted)", lineHeight: 1.5, marginTop: 0 }}>
-        Dosje četvrti — inventar iz učitanih otvorenih skupova Grada Zagreba. Popis, ne ocjena
-        kvarta. Svaki izvor nosi oznaku ažurnosti.
+      <h1>{cetvrt.naziv}</h1>
+      <p className="uvod">
+        Što otvoreni podaci Grada kažu o ovoj četvrti: tko vodi četvrt i mjesne odbore, koje su ustanove
+        ovdje, što je zatvoreno na cestama. Uz svaki izvor stoji koliko je podatak star.
       </p>
 
       <div
@@ -145,7 +147,7 @@ export default async function CetvrtDosjePage({
                 }
               />
             ) : (
-              <p style={{ margin: 0, color: "var(--muted)" }}>Nije u učitanom skupu.</p>
+              <p style={{ margin: 0, color: "var(--muted)" }}>Nema u ovom izvoru.</p>
             )}
           </Okvir>
 
@@ -162,7 +164,7 @@ export default async function CetvrtDosjePage({
                 ].filter((r): r is [string, string] => Boolean(r[1]))}
               />
             ) : (
-              <p style={{ margin: 0, color: "var(--muted)" }}>Nije u učitanom skupu.</p>
+              <p style={{ margin: 0, color: "var(--muted)" }}>Nema u ovom izvoru.</p>
             )}
           </Okvir>
 
@@ -220,7 +222,7 @@ export default async function CetvrtDosjePage({
                 <strong>{m.naziv}</strong>{" "}
                 <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
                   {[
-                    m.predsjednik ? `predsj. ${m.predsjednik.ime}` : null,
+                    m.predsjednik ? `predsjednik ${m.predsjednik.ime}` : null,
                     `${m.vijece.filter((v) => v.aktivan).length} vijećnika`,
                     m.prostorija ? `${m.prostorija} prostorija` : null,
                     `${m.objekata} objekata`,
@@ -246,7 +248,7 @@ export default async function CetvrtDosjePage({
                       email={m.predsjednik.email}
                     />
                   ) : (
-                    <p style={{ margin: 0, color: "var(--muted)" }}>Nije u učitanom skupu.</p>
+                    <p style={{ margin: 0, color: "var(--muted)" }}>Nema u ovom izvoru.</p>
                   )}
                 </Okvir>
                 <Okvir naslov="Sjedište MO" azurnost="starija_snimka">
@@ -261,7 +263,7 @@ export default async function CetvrtDosjePage({
                       )}
                     />
                   ) : (
-                    <p style={{ margin: 0, color: "var(--muted)" }}>Nije u učitanom skupu.</p>
+                    <p style={{ margin: 0, color: "var(--muted)" }}>Nema u ovom izvoru.</p>
                   )}
                 </Okvir>
               </div>
@@ -352,14 +354,14 @@ export default async function CetvrtDosjePage({
               ) : (
                 m.naziv
               )}{" "}
-              <Oznaka azurnost={m.azurnost} /> · sink. {formatDatum(m.sink)}
+              <Oznaka azurnost={m.azurnost} /> · preuzeto {formatDatum(m.sink)}
             </li>
           ))}
         </ul>
       </section>
 
       <p style={{ marginTop: "1.5rem", fontSize: "0.95rem" }}>
-        Preuzmi inventar:{" "}
+        Preuzmi popis:{" "}
         <a href={`/api/izvoz/cetvrt/${cetvrt.slug}`}>CSV</a>
         {" · "}
         <a href={`/api/izvoz/cetvrt/${cetvrt.slug}?format=geojson`}>GeoJSON</a>

@@ -29,7 +29,10 @@ provjeri "/ustanove?q=ljekarna&tema=usluge"
 provjeri /energija
 provjeri "/energija?q=skola&spojeni=da"
 provjeri /vodic
+provjeri /robots.txt
+provjeri /.well-known/security.txt
 provjeri /api/katalog
+provjeri "/api/trazi?q=ljekarna"
 provjeri "/api/sloj/ljekarne?format=csv"
 provjeri "/api/tablica/predsjednici_gc?format=csv"
 provjeri /api/sloj/cetvrti

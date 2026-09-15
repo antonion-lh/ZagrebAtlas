@@ -65,14 +65,14 @@ function Skup({ s }: { s: KatalogSkup }) {
           <dd style={{ margin: 0 }}>
             {s.zadnja_sinkronizacija ? (
               <>
-                {s.broj_zapisa?.toLocaleString("hr-HR") ?? "—"} zapisa · sink. {formatDatum(s.zadnja_sinkronizacija.toISOString())}
+                {s.broj_zapisa?.toLocaleString("hr-HR") ?? "—"} zapisa · preuzeto {formatDatum(s.zadnja_sinkronizacija.toISOString())}
                 {s.frekvencija_sink ? ` (${s.frekvencija_sink})` : ""}
               </>
             ) : (
               "još nije učitan"
             )}
             {s.neuspjeh > 0 ? (
-              <span style={{ color: "#b91c1c" }}> · {s.neuspjeh} neuspjelih sinkronizacija u 7 dana</span>
+              <span style={{ color: "#b91c1c" }}> · {s.neuspjeh} neuspjelih preuzimanja u 7 dana</span>
             ) : null}
           </dd>
           {s.resursi.length ? (
@@ -117,7 +117,7 @@ export default async function KatalogPage() {
   try {
     skupovi = await ucitajKatalog();
   } catch (e) {
-    greska = e instanceof Error ? e.message : "Greška baze";
+    greska = "Katalog se trenutačno ne može učitati.";
   }
 
   const grupe = TEME.map((t) => ({ tema: t, skupovi: skupovi.filter((s) => s.tema === t.sifra) })).filter(
@@ -130,13 +130,13 @@ export default async function KatalogPage() {
   );
 
   return (
-    <div style={{ maxWidth: "62rem", margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
-      <h1 style={{ marginTop: 0 }}>Katalog podataka</h1>
-      <p style={{ color: "var(--muted)", lineHeight: 1.5 }}>
-        Svi skupovi učitani u Atlas: izvor na data.zagreb.hr s licencom i resursima, oznaka ažurnosti,
-        stanje u Atlasu i preuzimanja u otvorenim formatima. {skupovi.length} skupova,{" "}
-        {ukupnoZapisa.toLocaleString("hr-HR")} zapisa{zadnja ? `, zadnja sinkronizacija ${formatDatum(zadnja.toISOString())}` : ""}.
-        Strojno čitljivo: <a href="/api/katalog">/api/katalog</a>.
+    <div className="stranica stranica-siroka">
+      <h1>Katalog podataka</h1>
+      <p className="uvod">
+        Svaki skup koji Atlas pokazuje: odakle dolazi, pod kojom licencom, koliko je star i gdje ga
+        preuzeti. {skupovi.length} skupova, {ukupnoZapisa.toLocaleString("hr-HR")} zapisa
+        {zadnja ? `, zadnje preuzimanje ${formatDatum(zadnja.toISOString())}` : ""}. Strojno čitljivo:{" "}
+        <a href="/api/katalog">/api/katalog</a>.
       </p>
 
       <nav aria-label="Teme u katalogu" style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem 0.9rem", fontSize: "0.9rem", margin: "0.5rem 0 1rem" }}>
@@ -175,14 +175,15 @@ export default async function KatalogPage() {
       )}
 
       <section id="api" style={{ marginTop: "2.25rem" }}>
-        <h2 style={{ fontSize: "1.15rem" }}>Asset lista — API i preuzimanja</h2>
+        <h2>Preuzimanja i programsko sučelje</h2>
         <p style={{ color: "var(--muted)", fontSize: "0.92rem", lineHeight: 1.5, marginTop: 0 }}>
-          Sve što Atlas prikazuje dostupno je i kao datoteka. Nema ključeva ni ograničenja; molimo keširajte
-          (odgovori nose <code>Cache-Control</code>). Koordinate su WGS84 (EPSG:4326). CSV koristi točku-zarez i UTF-8 s BOM-om.
+          Sve što Atlas pokazuje može se i preuzeti, bez ključa. Odgovori se mogu predmemorirati (nose
+          zaglavlje <code>Cache-Control</code>). Koordinate su WGS84 (EPSG:4326). CSV koristi točku-zarez
+          i UTF-8 s BOM-om.
         </p>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
           <caption style={{ textAlign: "left", color: "var(--muted)", fontSize: "0.85rem", padding: "0.3rem 0" }}>
-            Krajnje točke Atlasa
+            Putanje Atlasa
           </caption>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "2px solid var(--line)" }}>
@@ -206,7 +207,7 @@ export default async function KatalogPage() {
       </section>
 
       <section style={{ marginTop: "2rem", fontSize: "0.92rem", color: "var(--muted)", lineHeight: 1.55 }}>
-        <h2 style={{ fontSize: "1.05rem", color: "var(--ink)" }}>Napomene o obradi</h2>
+        <h2>Kako Atlas slaže podatke</h2>
         <ul style={{ paddingLeft: "1.1rem" }}>
           <li>Točke se pridružuju četvrti i mjesnom odboru prostorno (PostGIS). Točke do 500 m izvan granice pripisuju se najbližoj četvrti; dalje od toga ostaju bez četvrti (objekti izvan grada u Geoportal snimkama).</li>
           <li>Zatvaranja prometnica sijeku se s poligonom četvrti; jedno zatvaranje može biti u više četvrti.</li>

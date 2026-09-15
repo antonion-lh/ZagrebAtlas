@@ -1,4 +1,5 @@
 import { API_TOCKE, ucitajKatalog } from "@/lib/katalog";
+import { greskaPosluzitelja } from "@/lib/odgovor";
 import { AZURNOST_OPIS, TEMA_NAZIV } from "@/lib/slojevi-ui";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,10 @@ export async function GET(req: Request) {
       { headers: { "Cache-Control": "public, max-age=3600" } }
     );
   } catch (e) {
-    return Response.json({ greska: e instanceof Error ? e.message : "Greška baze" }, { status: 500 });
+    return greskaPosluzitelja(e);
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 204 });
 }

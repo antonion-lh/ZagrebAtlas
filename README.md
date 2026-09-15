@@ -95,17 +95,18 @@ Napomene o spajanju: MO nazivi su jedinstveni u gradu, pa se tablice spajaju po 
 
 | | Status |
 | --- | --- |
-| A Karta + inspector | radi: legenda po temama, lazy slojevi (`/api/sloj/[sifra]`), clustering, filter po četvrti, inspector s izvorom i ažurnošću; fallback bez WebGL-a; duboki linkovi `/?cetvrt=<slug>&sloj=a,b` |
+| A Karta + inspector | radi: pretraga u Zagrebu, legenda po temama (skupljene), lazy slojevi, clustering, četvrt, inspector; bez `role="application"`; dijeljenje poveznice; fallback bez WebGL-a; `/?cetvrt=<slug>&sloj=a,b` |
 | B Dosje četvrti | radi: predsjednik GČ, sjedište, vijeće GČ, prostori MS, područni ured; MO s predsjednikom, sjedištem i vijećem; inventar po temama s linkom „na karti” (veliki popisi > 80 se sažimaju); izvori; CSV + GeoJSON izvoz |
 | C Katalog ustanova | radi: `/ustanove` — pretraga po nazivu/adresi/vrsti, filter po temi, skupu i četvrti, kontakt, izvor + oznaka ažurnosti, straničenje |
 | D Energetski dosje ISGE | radi: `/energija` (pregled po godinama, energentima i četvrtima; pretraživ popis objekata), `/energija/[id]` (godišnje i mjesečne serije, SVG grafovi, CSV izvoz), sekcija „Energija gradskih objekata” u dosjeu četvrti, sloj `isge` na karti |
-| E Katalog podataka | radi: `/katalog` v2 — po temama, za svaki skup izvor (CKAN naslov, izdavač, licenca, datum izmjene, resursi s veličinom), stanje u Atlasu i preuzimanja (GeoJSON/CSV/JSON); asset lista API-ja; strojno čitljiv `/api/katalog` (DCAT-nalik) |
+| E Katalog podataka | radi: `/katalog` — po temama, izvor, licenca, stanje u Atlasu i preuzimanja; putanje za preuzimanje; strojno čitljiv `/api/katalog` |
 
 ## Preuzimanja i API
 
 | Putanja | Format | Sadržaj |
 | --- | --- | --- |
 | `/api/katalog` | JSON | katalog skupova s izvorima i Atlasovim distribucijama |
+| `/api/trazi?q=` | JSON | lokalna pretraga četvrti, mjesnih odbora i objekata |
 | `/api/sloj/{sifra}` | GeoJSON | sloj (WGS84); `?format=csv` → CSV s lon/lat i spljoštenim atributima |
 | `/api/tablica/{sifra}` | JSON / CSV | tablični skupovi: `ulice`, `predsjednici_gc`, `predsjednici_mo`, `clanovi_gc`, `clanovi_mo`, `prostori_ms`, `isge`, `isge_potrosnja` |
 | `/api/izvoz/cetvrt/{slug}` | CSV / GeoJSON | dosje četvrti |

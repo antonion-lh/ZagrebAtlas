@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: { absolute: "Karta grada — Zagreb Gradski atlas" },
-  description: "Interaktivna karta otvorenih podataka Grada Zagreba po temama, s oznakom ažurnosti svakog sloja.",
+  description: "Karta otvorenih podataka Grada Zagreba: četvrti, ustanove, zatvorene ceste. Svaki sloj kaže koliko je podatak star.",
 };
 
 export default async function HomePage() {
@@ -16,15 +16,15 @@ export default async function HomePage() {
 
   try {
     [slojevi, cetvrti] = await Promise.all([ucitajMetaSlojeva(), ucitajCetvrtiKratko()]);
-  } catch (e) {
-    greska = e instanceof Error ? e.message : "Greška baze";
+  } catch {
+    greska = "da";
   }
 
   if (greska) {
     return (
-      <div style={{ padding: "1.5rem" }}>
+      <div className="stranica">
         <h1>Karta grada</h1>
-        <p role="alert">Baza nije dostupna: {greska}</p>
+        <p role="alert">Karta se trenutačno ne može učitati. Pokušajte ponovo za koji trenutak.</p>
       </div>
     );
   }

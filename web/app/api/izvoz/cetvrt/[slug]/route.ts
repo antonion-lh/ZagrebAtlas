@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
 import { pool } from "@/lib/db";
 import { uCsv } from "@/lib/izvoz";
+import { greskaPosluzitelja, jsonGreska, slugCetvrtiValjan } from "@/lib/odgovor";
 import type { Feature, Geometry } from "geojson";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +10,16 @@ export async function GET(
   ctx: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await ctx.params;
+  if (!slugCetvrtiValjan(slug)) return jsonGreska(404, "Nepoznata četvrt");
   const format = new URL(req.url).searchParams.get("format") === "geojson" ? "geojson" : "csv";
 
-  const { rows: cetvrti } = await pool().query<{ id: number; naziv: string }>(
-    `SELECT id, naziv FROM geo.cetvrt WHERE slug = $1`,
-    [slug]
-  );
-  const cetvrt = cetvrti[0];
-  if (!cetvrt) notFound();
+  try {
+    const { rows: cetvrti } = await pool().query<{ id: number; naziv: string }>(
+      `SELECT id, naziv FROM geo.cetvrt WHERE slug = $1`,
+      [slug]
+    );
+    const cetvrt = cetvrti[0];
+    if (!cetvrt) return jsonGreska(404, "Nepoznata četvrt");
 
   const { rows } = await pool().query<{
     id: string;
@@ -112,10 +114,17 @@ export async function GET(
       r.lat?.toFixed(6) ?? "",
     ])
   );
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="atlas-${slug}.csv"`,
-    },
-  });
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="atlas-${slug}.csv"`,
+      },
+    });
+  } catch (e) {
+    return greskaPosluzitelja(e);
+  }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 204 });
 }

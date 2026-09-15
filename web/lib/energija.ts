@@ -1,4 +1,5 @@
 import { pool } from "@/lib/db";
+import { ocistiUpit } from "@/lib/odgovor";
 
 export type EnergijaObjekt = {
   id: number;
@@ -146,8 +147,13 @@ export async function energijaObjekti(
   const uvjeti: string[] = [];
   const args: unknown[] = [godina];
   if (f.q) {
-    const tokeni = f.q.split(/\s+/).filter((t) => t.length >= 2);
-    for (const t of tokeni.length ? tokeni : [f.q]) {
+    const tokeni = ocistiUpit(f.q)
+      .split(/\s+/)
+      .filter((t) => t.length >= 2)
+      .slice(0, 6);
+    for (const sirovi of tokeni.length ? tokeni : [ocistiUpit(f.q)]) {
+      const t = sirovi.replace(/[%_\\]/g, "");
+      if (t.length < 2) continue;
       args.push(`%${t}%`);
       uvjeti.push(`(e.naziv ILIKE $${args.length} OR e.adresa ILIKE $${args.length})`);
     }
